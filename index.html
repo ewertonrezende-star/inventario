@@ -43,10 +43,53 @@ small.hint{color:var(--muted);font-size:11.5px}
 .speech-row input{flex:1;min-width:0}
 .speech-row button{flex:0 0 52px;padding:10px;font-size:21px}
 .speech-row button.listening{background:var(--bad);color:#fff}
+
+/* Interface simplificada: mobile-first */
+:root{--bg:#f3f5f1;--card:#fff;--ink:#1d2a1a;--muted:#697568;--line:#dfe6dc;--gold:#d6a52e;--good:#26733b;--bad:#b23b3b}
+body{background:var(--bg);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+header{background:#244d2b;color:#fff;text-align:left;padding:18px 18px 20px;box-shadow:0 2px 10px #172d1b20}
+header h1{font-size:21px;font-weight:750;letter-spacing:-.4px;margin:0 0 5px}
+header p{color:#e0eadf;font-size:13px}
+main{gap:12px;padding:14px 14px 100px;max-width:560px}
+.card{border:1px solid #e3e9e1;border-radius:17px;padding:15px;box-shadow:0 3px 12px #20382009}
+#storeCard{border-top:4px solid #d6a52e}
+#storeSelect{font-weight:650!important;border-radius:12px!important;background:#fbfcfa!important}
+#inventoryArea>.card:first-child{background:#edf5eb;border-color:#d6e6d3}
+#inventoryTitle{font-size:17px;color:#244d2b}
+#syncStatus{font-size:11.5px}
+label{font-size:12px;font-weight:700;letter-spacing:.15px;color:#657263;margin-bottom:7px}
+input[type=text],input[type=number]{border:1.5px solid #dce4d9;border-radius:12px;background:#fbfcfa;font-size:17px;padding:14px;color:#1d2a1a;min-height:50px}
+input:focus{outline:3px solid #d6a52e35;border-color:#bd8e22}
+button{border-radius:12px;min-height:46px;font-size:14px;font-weight:700;transition:transform .12s,filter .12s}
+button:active{transform:scale(.98)}
+.btn-gold{background:#d6a52e;color:#241a05;box-shadow:0 2px 5px #a77b2025}
+.btn-outline{background:#f7f9f6;border:1px solid #dce4d9;color:#29432b}
+.btn-bad{border-radius:10px}
+#lookupCodeBtn{flex:1.3}
+#manualArticleBtn{flex:1}
+#camBtn,#stopCam{min-height:44px}
+#qtyCard{border:2px solid #d6a52e;background:#fffdf7}
+#articleShown{font-size:17px;line-height:1.35;display:block;margin:2px 0 4px}
+#qty{font-size:22px;font-weight:750;text-align:center;max-width:145px}
+#addBtn{flex:1.2;font-size:15px}
+#listWrap table{font-size:12.5px}
+#listWrap th{font-size:10.5px}
+#listWrap td{padding:10px 4px;vertical-align:middle}
+#listWrap td:first-child{font-weight:700}
+#listWrap td.del span{display:inline-block;padding:5px 7px;border-radius:7px;background:#fff1f0}
+.empty{padding:18px 8px}
+.bar{max-width:560px;padding:11px 14px calc(11px + env(safe-area-inset-bottom,0px));background:#fff;box-shadow:0 -4px 18px #1b321b0d}
+.bar button{min-height:49px}
+.speech-row button{min-height:50px}
+small.hint{line-height:1.45;display:block;margin-top:8px}
+#camWrap{margin-top:10px}
+.toast{z-index:20;top:calc(12px + env(safe-area-inset-top,0px));font-weight:650;box-shadow:0 4px 16px #0002}
+@media(min-width:560px){main{padding-top:18px}}
+
 </style>
 </head>
 <body>
-<header><h1>📦 Contagem de inventário</h1><p>Lê com a pistola ou com a câmara do telemóvel</p></header>
+<header><h1>📦 Inventário Coopsintra</h1><p>Contagem simples · sincronizada entre telemóveis</p></header>
 <div class="toast" id="toast"></div>
 <main>
   <div class="card" id="storeCard">
@@ -62,7 +105,7 @@ small.hint{color:var(--muted);font-size:11.5px}
       <small class="hint" id="syncStatus" style="display:block;margin-top:4px">A sincronizar...</small>
     </div>
     <div class="card">
-      <label for="code">Código de barras ou artigo</label>
+      <label for="code">1. LER OU INTRODUZIR CÓDIGO DE BARRAS</label>
       <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lê ou escreve o código de barras">
       <div class="row" style="margin-top:8px">
         <button class="btn-gold" id="lookupCodeBtn" type="button">Procurar código</button>
@@ -77,7 +120,7 @@ small.hint{color:var(--muted);font-size:11.5px}
       <small class="hint" id="camMsg"></small>
     </div>
     <div class="card" id="searchCard" style="display:none">
-      <label for="articleSearch">Pesquisa o produto pelo nome ou código e seleciona-o. Se tiveres lido ou escrito um código de barras, ele será associado ao artigo:</label>
+      <label for="articleSearch">PESQUISAR ARTIGO PELO NOME OU CÓDIGO</label>
       <div class="speech-row"><input id="articleSearch" type="text" placeholder="Código do artigo ou descrição"><button type="button" class="btn-outline" id="voiceArticleSearch" aria-label="Falar nome do artigo" title="Falar">🎙️</button></div>
       <button class="btn-gold" id="searchBtn" type="button" style="width:100%;margin-top:8px">Pesquisar artigos</button><small class="hint" id="associationStatus" style="display:block;margin-top:6px"></small>
       <div id="searchResults"></div>
@@ -86,7 +129,7 @@ small.hint{color:var(--muted);font-size:11.5px}
       <label>Artigo selecionado</label>
       <strong id="articleShown"></strong>
       <small class="hint" id="articleCodeShown" style="display:block;margin:3px 0 8px"></small>
-      <label for="qty">Quantidade</label>
+      <label for="qty">2. QUANTIDADE A CONTAR</label>
       <div class="row">
         <input id="qty" type="number" inputmode="decimal" placeholder="Quantidade" min="0" step="any">
         <button class="btn-gold" id="addBtn" type="button">Adicionar</button>
@@ -94,7 +137,7 @@ small.hint{color:var(--muted);font-size:11.5px}
     </div>
     <div class="card">
       <div class="row" style="align-items:center;margin-bottom:6px">
-        <strong style="flex:2">Artigos contados (<span id="count">0</span>)</strong>
+        <strong style="flex:2">Contagem desta loja · <span id="count">0</span> artigos</strong>
         <button class="btn-outline" id="refreshBtn" type="button">Atualizar</button>
       </div>
       <div id="listWrap"><div class="empty">Ainda não há artigos contados nesta loja.</div></div>
