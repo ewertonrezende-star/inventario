@@ -231,9 +231,31 @@ async function searchArticles(){
     if(byCode.error)throw byCode.error;if(byDesc.error)throw byDesc.error;
     const unique=new Map();[...(byCode.data||[]),...(byDesc.data||[])].forEach(a=>unique.set(a.codigo_artigo,a));
     const results=[...unique.values()];
-    $('searchResults').innerHTML=results.length?results.map((a,i)=>'<button type="button" class="btn-outline" data-article="'+i+'" style="width:100%;text-align:left;margin-top:6px">'+esc(a.codigo_artigo)+' — '+esc(a.descricao)+'</button>').join(''):'<div class="empty">Não foram encontrados artigos ativos.</div>';
+    $('searchResults').innerHTML=results.length?results.map((a,i)=>'<button type="button" class="btn-outline" data-article="'+i+'" style="width:100%;text-align:left;margin-top:6px">'+esc(a.codigo_artigo)+' — '+esc(a.descricao)+'</button>').join(''):'<div class="empty">Não foi encontrado nenhum artigo com essa pesquisa.</div><button type="button" class="btn-gold" id="createArticleBtn" style="width:100%;margin-top:8px">＋ Criar novo artigo</button>';
     $('searchResults').querySelectorAll('[data-article]').forEach(el=>el.addEventListener('click',()=>chooseArticle(results[Number(el.dataset.article)])));
+    const createBtn=$('createArticleBtn');
+    if(createBtn)createBtn.addEventListener('click',()=>{
+      const suggested=$('articleSearch').value.trim();
+      $('searchResults').innerHTML='<label for="newArticleDescription" style="margin-top:10px">Descrição / nome do novo artigo</label><input id="newArticleDescription" type="text" maxlength="250" value="'+esc(suggested).replace(/"/g,'&quot;')+'" placeholder="Escreve a descrição do artigo"><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar novo artigo</button>';
+      $('newArticleDescription').focus();
+      $('saveNewArticleBtn').addEventListener('click',createNewArticle);
+    });
   }catch(e){console.error(e);toast('Erro ao pesquisar artigos.');}
+}
+async function createNewArticle(){
+  const description=$('newArticleDescription').value.trim();
+  if(!description){toast('Escreve a descrição do artigo.');$('newArticleDescription').focus();return;}
+  try{
+    const articleCode='INV-'+Date.now().toString();
+    const {data:created,error}=await db.from('inv_artigos').insert({codigo_artigo:articleCode,descricao:description,ativo:true}).select('codigo_artigo,descricao,ativo').single();
+    if(error)throw error;
+    toast('Novo artigo criado.');
+    await chooseArticle(created);
+  }catch(e){
+    console.error(e);
+    $('associationStatus').textContent='Não foi possível criar o artigo: '+(e.message||e);
+    toast('Erro ao criar artigo. Verifica os campos obrigatórios e permissões.');
+  }
 }
 async function addCount(){
   if(!inventory||!selectedArticle)return;
@@ -243,7 +265,7 @@ async function addCount(){
     const {error}=await db.from('inv_contagens').insert({inventario_id:inventory.id,codigo_artigo:selectedArticle.codigo_artigo,codigo_barras_lido:scannedBarcode,quantidade:quantity,dispositivo_id:deviceId});
     if(error)throw error;
     toast('Contagem guardada: '+selectedArticle.codigo_artigo);
-    selectedArticle=null;$('qtyCard').style.display='none';$('code').value='';lastProcessedCode='';$('code').focus();
+    selectedArticle=null;scannedBarcode='';$('qtyCard').style.display='none';$('code').value='';lastProcessedCode='';$('searchCard').style.display='none';$('searchResults').innerHTML='';$('code').focus();
     await loadCounts();
   }catch(e){console.error(e);toast('Não foi possível guardar: '+(e.message||e));}
 }
