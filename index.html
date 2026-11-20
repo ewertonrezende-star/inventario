@@ -68,9 +68,9 @@ small.hint{color:var(--muted);font-size:11.5px}
       <small class="hint" id="camMsg"></small>
     </div>
     <div class="card" id="searchCard" style="display:none">
-      <label for="articleSearch">Artigo não encontrado pelo código de barras. Pesquisa pelo código ou descrição:</label>
+      <label for="articleSearch">Código não reconhecido. Pesquisa o produto pelo nome ou código e seleciona-o para associar automaticamente este código de barras:</label>
       <input id="articleSearch" type="text" placeholder="Código do artigo ou descrição">
-      <button class="btn-gold" id="searchBtn" type="button" style="width:100%;margin-top:8px">Pesquisar artigos</button>
+      <button class="btn-gold" id="searchBtn" type="button" style="width:100%;margin-top:8px">Pesquisar artigos</button><small class="hint" id="associationStatus" style="display:block;margin-top:6px"></small>
       <div id="searchResults"></div>
     </div>
     <div class="card" id="qtyCard" style="display:none">
@@ -96,11 +96,6 @@ small.hint{color:var(--muted);font-size:11.5px}
 <div class="bar" id="bottomBar" style="display:none">
   <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
 </div>
-<div class="bar">
-  <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
@@ -110,7 +105,7 @@ const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSe
 const stores=[['AL','Albarraque'],['AM','Arneiro Marinheiro'],['CO','Colares'],['MM','Mem Martins'],['LC','Sintra'],['SA','Sabugo']];
 const $=id=>document.getElementById(id);
 const storeSelect=$('storeSelect'),storeStatus=$('storeStatus'),inventoryArea=$('inventoryArea');
-let inventory=null, scannedBarcode='', selectedArticle=null, countRows=[], refreshTimer=null, deviceId=localStorage.getItem('inv_device_id');
+let inventory=null, scannedBarcode='', selectedArticle=null, countRows=[], refreshTimer=null, deviceId=localStorage.getItem('inv_device_id'), scanDebounce=null, lastProcessedCode='', processingCode=false;
 if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('device-'+Date.now()+'-'+Math.random().toString(16).slice(2)));localStorage.setItem('inv_device_id',deviceId);}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
 function setSync(msg){$('syncStatus').textContent=msg;}
@@ -169,7 +164,10 @@ async function loadCounts(){
   }catch(e){console.error(e);setSync('Falha na sincronização: '+(e.message||e));}
 }
 async function resolveCode(value){
-  scannedBarcode=value;selectedArticle=null;$('searchCard').style.display='none';$('qtyCard').style.display='none';
+  value=String(value||'').trim();if(!value||processingCode||value===lastProcessedCode)return;
+  processingCode=true;lastProcessedCode=value;scannedBarcode=value;selectedArticle=null;
+  $('searchCard').style.display='none';$('qtyCard').style.display='none';$('associationStatus').textContent='';
+  setSync('A procurar automaticamente o código '+value+'...');
   try{
     let articleCode=value;
     const {data:barcode,error:barcodeErr}=await db.from('inv_codigos_barras').select('codigo_artigo').eq('codigo_barras',value).limit(1).maybeSingle();
@@ -177,15 +175,46 @@ async function resolveCode(value){
     if(barcode&&barcode.codigo_artigo)articleCode=barcode.codigo_artigo;
     const {data:article,error}=await db.from('inv_artigos').select('codigo_artigo,descricao,ativo').eq('codigo_artigo',articleCode).eq('ativo',true).limit(1).maybeSingle();
     if(error)throw error;
-    if(article){chooseArticle(article);return;}
-    $('articleSearch').value=value;$('searchCard').style.display='block';$('articleSearch').focus();
-    toast('Código não encontrado. Pesquisa o artigo.');
-  }catch(e){console.error(e);toast('Erro na pesquisa: '+(e.message||e));}
+    if(article){await chooseArticle(article);return;}
+    $('articleSearch').value='';$('searchCard').style.display='block';$('articleSearch').focus();
+    $('associationStatus').textContent='Código lido: '+value+'. Pesquisa o produto para o associar.';
+    toast('Código não reconhecido. Escolhe o artigo para associar.');
+  }catch(e){console.error(e);toast('Erro na pesquisa: '+(e.message||e));setSync('Erro ao pesquisar o código.');}
+  finally{processingCode=false;}
 }
-function chooseArticle(article){
-  selectedArticle=article;$('articleShown').textContent=article.descricao||article.codigo_artigo;
+async function saveBarcodeAssociation(article){
+  if(!scannedBarcode||scannedBarcode===article.codigo_artigo)return;
+  const {data:existing,error:findError}=await db.from('inv_codigos_barras').select('id,codigo_artigo').eq('codigo_barras',scannedBarcode).limit(1).maybeSingle();
+  if(findError)throw findError;
+  if(existing){
+    if(existing.codigo_artigo!==article.codigo_artigo){
+      const {error:updateError}=await db.from('inv_codigos_barras').update({codigo_artigo:article.codigo_artigo}).eq('id',existing.id);
+      if(updateError)throw updateError;
+    }
+  }else{
+    const {error:insertError}=await db.from('inv_codigos_barras').insert({codigo_barras:scannedBarcode,codigo_artigo:article.codigo_artigo});
+    if(insertError)throw insertError;
+  }
+}
+async function chooseArticle(article){
+  selectedArticle=article;
+  $('articleShown').textContent=article.descricao||article.codigo_artigo;
   $('articleCodeShown').textContent='Código: '+article.codigo_artigo+' · Código lido: '+scannedBarcode;
-  $('searchCard').style.display='none';$('qtyCard').style.display='block';$('qty').value='';$('qty').focus();
+  $('searchCard').style.display='none';$('qtyCard').style.display='none';
+  try{
+    if(scannedBarcode&&scannedBarcode!==article.codigo_artigo){
+      $('associationStatus').textContent='A guardar associação do código de barras...';
+      await saveBarcodeAssociation(article);
+      $('associationStatus').textContent='Código de barras associado a '+article.codigo_artigo+'. Nas próximas leituras será reconhecido automaticamente.';
+      toast('Código associado ao artigo.');
+    }
+    $('qtyCard').style.display='block';$('qty').value='';$('qty').focus();
+  }catch(e){
+    console.error(e);selectedArticle=null;
+    $('searchCard').style.display='block';
+    $('associationStatus').textContent='Não foi possível associar o código: '+(e.message||e);
+    toast('Falha ao associar código. Verifica permissões.');
+  }
 }
 async function searchArticles(){
   const term=$('articleSearch').value.trim();if(!term)return;
@@ -209,7 +238,7 @@ async function addCount(){
     const {error}=await db.from('inv_contagens').insert({inventario_id:inventory.id,codigo_artigo:selectedArticle.codigo_artigo,codigo_barras_lido:scannedBarcode,quantidade:quantity,dispositivo_id:deviceId});
     if(error)throw error;
     toast('Contagem guardada: '+selectedArticle.codigo_artigo);
-    selectedArticle=null;$('qtyCard').style.display='none';$('code').value='';$('code').focus();
+    selectedArticle=null;$('qtyCard').style.display='none';$('code').value='';lastProcessedCode='';$('code').focus();
     await loadCounts();
   }catch(e){console.error(e);toast('Não foi possível guardar: '+(e.message||e));}
 }
@@ -230,7 +259,14 @@ function exportCSV(){
   a.href=URL.createObjectURL(blob);a.download='inventario-'+(inventory?inventory.loja:'loja')+'.csv';a.click();URL.revokeObjectURL(a.href);
 }
 $('storeSelect').addEventListener('change',selectStore);
-$('code').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const v=$('code').value.trim();if(v)resolveCode(v);}});
+$('code').addEventListener('input',()=>{
+  clearTimeout(scanDebounce);
+  const value=$('code').value.trim();
+  if(value.length>=3)scanDebounce=setTimeout(()=>resolveCode(value),320);
+});
+$('code').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();clearTimeout(scanDebounce);const v=$('code').value.trim();if(v)resolveCode(v);}
+});
 $('articleSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchArticles();}});
 $('searchBtn').addEventListener('click',searchArticles);
 $('addBtn').addEventListener('click',addCount);
@@ -248,7 +284,7 @@ async function startCam(){
   try{
     $('camWrap').style.display='block';$('camBtn').style.display='none';$('stopCam').style.display='block';
     scanControls=await zxReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},$('video'),result=>{
-      if(result){$('code').value=result.getText();resolveCode(result.getText());closeCam();}
+      if(result){$('code').value=result.getText();lastProcessedCode='';resolveCode(result.getText());closeCam();}
     });
   }catch(e){$('camMsg').textContent='Não foi possível aceder à câmara. Verifica a permissão do navegador.';closeCam();}
 }
