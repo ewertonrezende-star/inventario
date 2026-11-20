@@ -82,6 +82,10 @@ button:active{transform:scale(.98)}
 .bar button{min-height:49px}
 .speech-row button{min-height:50px}
 small.hint{line-height:1.45;display:block;margin-top:8px}
+#scannerStatus{display:flex;align-items:center;gap:8px;margin-top:9px;padding:10px 11px;border-radius:10px;background:#eaf3e8;color:#244d2b;font-size:12px;font-weight:700}
+#scannerStatus:before{content:"";width:9px;height:9px;border-radius:50%;background:#2f7a3d;flex:0 0 9px}
+#scannerStatus.waiting:before{background:#d6a52e}
+#focusScanBtn{margin-top:8px;width:100%}
 #camWrap{margin-top:10px}
 .toast{z-index:20;top:calc(12px + env(safe-area-inset-top,0px));font-weight:650;box-shadow:0 4px 16px #0002}
 @media(min-width:560px){main{padding-top:18px}}
@@ -106,7 +110,9 @@ small.hint{line-height:1.45;display:block;margin-top:8px}
     </div>
     <div class="card">
       <label for="code">1. LER OU INTRODUZIR CÓDIGO DE BARRAS</label>
-      <input id="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Lê ou escreve o código de barras">
+      <input id="code" type="text" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="Aguardar leitura da pistola Datalogic">
+      <div id="scannerStatus" class="waiting" role="status" aria-live="polite">Campo preparado. Liga o QBT2500 por Bluetooth e lê o código.</div>
+      <button class="btn-outline" id="focusScanBtn" type="button">↗ Preparar leitor</button>
       <div class="row" style="margin-top:8px">
         <button class="btn-gold" id="lookupCodeBtn" type="button">Procurar código</button>
         <button class="btn-outline" id="manualArticleBtn" type="button">Pesquisar artigo</button>
@@ -115,7 +121,7 @@ small.hint{line-height:1.45;display:block;margin-top:8px}
         <button class="btn-outline" id="camBtn" type="button">📷 Usar câmara</button>
         <button class="btn-outline" id="stopCam" type="button" style="display:none">✕ Fechar câmara</button>
       </div>
-      <small class="hint">Também podes escrever o código manualmente. Em etiquetas redondas, curvas ou com reflexo, aproxima a câmara de frente e, se necessário, introduz o código pelo teclado.</small>
+      <small class="hint">Modo pistola Bluetooth (HID): o Datalogic envia o código como teclado. O campo fica preparado para leitura e o Enter enviado pelo leitor confirma automaticamente. Para pesquisa manual, utiliza “Pesquisar artigo”.</small>
       <div id="camWrap"><video id="video" playsinline muted></video><div class="scanline"></div></div>
       <small class="hint" id="camMsg"></small>
     </div>
@@ -160,6 +166,9 @@ const storeSelect=$('storeSelect'),storeStatus=$('storeStatus'),inventoryArea=$(
 let inventory=null, scannedBarcode='', selectedArticle=null, countRows=[], refreshTimer=null, deviceId=localStorage.getItem('inv_device_id'), scanDebounce=null, lastProcessedCode='', processingCode=false;
 if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('device-'+Date.now()+'-'+Math.random().toString(16).slice(2)));localStorage.setItem('inv_device_id',deviceId);}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
+function setScannerStatus(message,waiting=false){const el=$('scannerStatus');if(!el)return;el.textContent=message;el.classList.toggle('waiting',waiting);}
+function focusBarcode(){const field=$('code');if(!field||!inventory)return;try{field.focus({preventScroll:true});}catch(e){field.focus();}setScannerStatus('Pronto para leitura. Confirma que o Datalogic está ligado por Bluetooth.',true);}
+function scanFeedback(){try{if('vibrate' in navigator)navigator.vibrate(65);}catch(e){}}
 function setSync(msg){$('syncStatus').textContent=msg;}
 function startVoiceInput(inputId,button){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -216,7 +225,7 @@ async function selectStore(){
     await loadCounts();
     if(refreshTimer)clearInterval(refreshTimer);
     refreshTimer=setInterval(loadCounts,4000);
-    $('code').focus();
+    focusBarcode();
   }catch(e){
     console.error(e);storeStatus.textContent='Erro ao abrir inventário: '+(e.message||e);toast('Não foi possível abrir a loja.');
   }finally{storeSelect.disabled=false;}
@@ -250,7 +259,7 @@ async function loadCounts(){
 }
 async function resolveCode(value){
   value=String(value||'').trim();if(!value||processingCode||value===lastProcessedCode)return;
-  processingCode=true;lastProcessedCode=value;scannedBarcode=value;selectedArticle=null;
+  processingCode=true;lastProcessedCode=value;scannedBarcode=value;selectedArticle=null;setScannerStatus('Código recebido: '+value+'. A identificar artigo...',false);scanFeedback();
   $('searchCard').style.display='none';$('qtyCard').style.display='none';$('associationStatus').textContent='';
   setSync('A procurar automaticamente o código '+value+'...');
   try{
@@ -350,8 +359,8 @@ async function addCount(){
   try{
     const {error}=await db.from('inv_contagens').insert({inventario_id:inventory.id,codigo_artigo:selectedArticle.codigo_artigo,codigo_barras_lido:scannedBarcode,quantidade:quantity,dispositivo_id:deviceId});
     if(error)throw error;
-    toast('Contagem guardada: '+selectedArticle.codigo_artigo);
-    selectedArticle=null;scannedBarcode='';$('qtyCard').style.display='none';$('code').value='';lastProcessedCode='';$('searchCard').style.display='none';$('searchResults').innerHTML='';$('code').focus();
+    toast('Contagem guardada: '+selectedArticle.codigo_artigo);setScannerStatus('Contagem gravada. Leitor pronto para o próximo artigo.',true);
+    selectedArticle=null;scannedBarcode='';$('qtyCard').style.display='none';$('code').value='';lastProcessedCode='';$('searchCard').style.display='none';$('searchResults').innerHTML='';focusBarcode();
     await loadCounts();
   }catch(e){console.error(e);toast('Não foi possível guardar: '+(e.message||e));}
 }
@@ -376,10 +385,11 @@ $('code').addEventListener('input',()=>{
   clearTimeout(scanDebounce);
   const value=$('code').value.trim();
   if(value!==lastProcessedCode)lastProcessedCode='';
-  if(value.length>=3)scanDebounce=setTimeout(()=>resolveCode(value),900);
+  if(value.length>=3)scanDebounce=setTimeout(()=>resolveCode(value),350);
 });
 function lookupTypedCode(){clearTimeout(scanDebounce);const v=$('code').value.trim();if(v){lastProcessedCode='';resolveCode(v);}}
 $('lookupCodeBtn').addEventListener('click',lookupTypedCode);
+$('focusScanBtn').addEventListener('click',focusBarcode);
 $('code').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();lookupTypedCode();}
 });
