@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inventário – Scan</title>
+<style>
+:root{--bg:#f6f5f0;--card:#fff;--ink:#1d2a1a;--muted:#6b7266;--line:#e2e2da;--gold:#c99a2e;--good:#2f7a3d;--bad:#b23b3b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#15180f;--card:#1f2317;--ink:#eee;--muted:#9aa092;--line:#333a28}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:flex;flex-direction:column;min-height:100%}
+header{padding:14px 16px 6px;text-align:center}
+header h1{font-size:18px;margin:0 0 2px}
+header p{margin:0;color:var(--muted);font-size:12.5px}
+main{flex:1;display:flex;flex-direction:column;gap:10px;padding:10px 12px 90px;max-width:520px;margin:0 auto;width:100%}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=number]{width:100%;font-size:19px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink)}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+button{font-size:15px;font-weight:600;border:none;border-radius:10px;padding:11px 14px;cursor:pointer}
+.btn-gold{background:var(--gold);color:#241a05}
+.btn-outline{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn-bad{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+#camWrap{display:none;position:relative;border-radius:10px;overflow:hidden;background:#000}
+#camWrap video{width:100%;display:block;max-height:46vh;object-fit:cover}
+#camWrap .scanline{position:absolute;left:5%;right:5%;top:50%;height:2px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase}
+td.qty{text-align:right;font-variant-numeric:tabular-nums}
+td.del{text-align:right}
+td.del span{color:var(--bad);cursor:pointer;font-size:13px}
+.empty{color:var(--muted);text-align:center;font-size:13px;padding:14px 0}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:8px;max-width:520px;margin:0 auto}
+.bar>*{flex:1}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--good);color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:1}
+small.hint{color:var(--muted);font-size:11.5px}
+</style>
+</head>
+<body>
+<header><h1>📦 Contagem de inventário</h1><p>Lê com a pistola ou com a câmara do telemóvel</p></header>
+<div class="toast" id="toast"></div>
+<main>
+  <div class="card">
+    <label for="code">Código de barras</label>
+    <input id="code" type="text" inputmode="none" autocomplete="off" placeholder="Aponta a pistola e lê, ou usa a câmara" autofocus>
+    <div class="row" style="margin-top:8px">
+      <button class="btn-outline" id="camBtn" type="button">📷 Usar câmara</button>
+      <button class="btn-outline" id="stopCam" type="button" style="display:none">✕ Fechar câmara</button>
+    </div>
+    <div id="camWrap"><video id="video" playsinline muted></video><div class="scanline"></div></div>
+    <small class="hint" id="camMsg"></small>
+  </div>
+
+  <div class="card" id="qtyCard" style="display:none">
+    <label>Código lido: <b id="codeShown"></b></label>
+    <div class="row">
+      <input id="qty" type="number" inputmode="numeric" placeholder="Quantidade" min="0">
+      <button class="btn-gold" id="addBtn" type="button">Adicionar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="align-items:center;margin-bottom:6px">
+      <strong style="flex:2">Lista contada (<span id="count">0</span>)</strong>
+      <button class="btn-outline" id="clearBtn" type="button">Limpar tudo</button>
+    </div>
+    <div id="listWrap"><div class="empty">Ainda não leste nenhum código.</div></div>
+  </div>
+</main>
+<div class="bar">
+  <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+<script>
+const codeEl=document.getElementById('code'),qtyCard=document.getElementById('qtyCard'),codeShown=document.getElementById('codeShown'),
+qtyEl=document.getElementById('qty'),addBtn=document.getElementById('addBtn'),listWrap=document.getElementById('listWrap'),
+countEl=document.getElementById('count'),toast=document.getElementById('toast'),camBtn=document.getElementById('camBtn'),
+stopCam=document.getElementById('stopCam'),camWrap=document.getElementById('camWrap'),video=document.getElementById('video'),
+camMsg=document.getElementById('camMsg');
+
+let items=JSON.parse(localStorage.getItem('inv_items')||'[]');
+let stream=null, detecting=false;
+
+function save(){localStorage.setItem('inv_items',JSON.stringify(items));}
+function showToast(msg){toast.textContent=msg;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),1200);}
+
+function render(){
+  countEl.textContent=items.length;
+  if(!items.length){listWrap.innerHTML='<div class="empty">Ainda não leste nenhum código.</div>';return;}
+  let rows=items.map((it,i)=>`<tr><td>${it.code}</td><td class="qty">${it.qty}</td><td class="del"><span onclick="removeItem(${i})">Apagar</span></td></tr>`).join('');
+  listWrap.innerHTML=`<table><thead><tr><th>Código</th><th>Qtd</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+window.removeItem=function(i){items.splice(i,1);save();render();}
+
+function focusCode(){codeEl.value='';qtyCard.style.display='none';codeEl.focus();}
+
+codeEl.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const v=codeEl.value.trim();
+    if(!v)return;
+    codeShown.textContent=v;
+    qtyCard.style.display='block';
+    qtyEl.value='';
+    qtyEl.focus();
+  }
+});
+qtyEl.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addBtn.click();}});
+addBtn.addEventListener('click',()=>{
+  const code=codeShown.textContent, qty=parseFloat(qtyEl.value);
+  if(!code||isNaN(qty))return;
+  const existing=items.find(it=>it.code===code);
+  if(existing)existing.qty+=qty; else items.push({code,qty});
+  save();render();showToast('Adicionado: '+code);
+  focusCode();
+});
+document.getElementById('clearBtn').addEventListener('click',()=>{
+  if(confirm('Apagar toda a lista contada?')){items=[];save();render();}
+});
+
+// Camera scanning (ZXing: funciona em Chrome Android e Safari/iOS)
+const zxReader = ('ZXing' in window) ? new ZXing.BrowserMultiFormatReader() : null;
+let scanControls=null;
+async function startCam(){
+  camMsg.textContent='';
+  if(!zxReader){
+    camMsg.textContent='Não foi possível carregar o leitor de câmara. Tenta recarregar a página, ou usa a pistola.';
+    return;
+  }
+  try{
+    camWrap.style.display='block'; camBtn.style.display='none'; stopCam.style.display='block';
+    scanControls = await zxReader.decodeFromConstraints(
+      {video:{facingMode:{ideal:'environment'}}},
+      video,
+      (result)=>{
+        if(result){
+          codeEl.value=result.getText();
+          codeEl.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}));
+          closeCam();
+        }
+      }
+    );
+  }catch(e){
+    camMsg.textContent='Não foi possível aceder à câmara. Verifica se deste permissão ao navegador nas definições.';
+    camWrap.style.display='none'; camBtn.style.display='block'; stopCam.style.display='none';
+  }
+}
+function closeCam(){
+  try{ if(scanControls&&scanControls.stop) scanControls.stop(); else if(zxReader) zxReader.reset(); }catch(e){}
+  scanControls=null;
+  camWrap.style.display='none'; camBtn.style.display='block'; stopCam.style.display='none';
+}
+camBtn.addEventListener('click',startCam);
+stopCam.addEventListener('click',closeCam);
+
+// Export
+document.getElementById('exportBtn').addEventListener('click',async()=>{
+  if(!items.length){showToast('Lista vazia');return;}
+  let csv='Codigo;Quantidade\n'+items.map(it=>`${it.code};${it.qty}`).join('\n');
+  const downloads=await claude.use('downloads');
+  if(downloads){
+    await downloads.save({filename:'contagem-inventario.csv',data:csv});
+  } else {
+    const blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download='contagem-inventario.csv';a.click();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
