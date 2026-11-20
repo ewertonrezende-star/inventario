@@ -39,6 +39,10 @@ td.del span{color:var(--bad);cursor:pointer;font-size:13px}
 .toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);background:var(--good);color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:1}
 small.hint{color:var(--muted);font-size:11.5px}
+.speech-row{display:flex;gap:8px;align-items:center}
+.speech-row input{flex:1;min-width:0}
+.speech-row button{flex:0 0 52px;padding:10px;font-size:21px}
+.speech-row button.listening{background:var(--bad);color:#fff}
 </style>
 </head>
 <body>
@@ -74,7 +78,7 @@ small.hint{color:var(--muted);font-size:11.5px}
     </div>
     <div class="card" id="searchCard" style="display:none">
       <label for="articleSearch">Pesquisa o produto pelo nome ou código e seleciona-o. Se tiveres lido ou escrito um código de barras, ele será associado ao artigo:</label>
-      <input id="articleSearch" type="text" placeholder="Código do artigo ou descrição">
+      <div class="speech-row"><input id="articleSearch" type="text" placeholder="Código do artigo ou descrição"><button type="button" class="btn-outline" id="voiceArticleSearch" aria-label="Falar nome do artigo" title="Falar">🎙️</button></div>
       <button class="btn-gold" id="searchBtn" type="button" style="width:100%;margin-top:8px">Pesquisar artigos</button><small class="hint" id="associationStatus" style="display:block;margin-top:6px"></small>
       <div id="searchResults"></div>
     </div>
@@ -114,6 +118,39 @@ let inventory=null, scannedBarcode='', selectedArticle=null, countRows=[], refre
 if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('device-'+Date.now()+'-'+Math.random().toString(16).slice(2)));localStorage.setItem('inv_device_id',deviceId);}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
 function setSync(msg){$('syncStatus').textContent=msg;}
+function startVoiceInput(inputId,button){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){toast('O reconhecimento de voz não está disponível neste navegador. Usa o Chrome.');return;}
+  const input=$(inputId);
+  const recognition=new SpeechRecognition();
+  recognition.lang='pt-PT';
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  button.classList.add('listening');
+  button.textContent='🎙️';
+  button.disabled=true;
+  let finalText='';
+  recognition.onresult=event=>{
+    let interim='';
+    for(let i=event.resultIndex;i<event.results.length;i++){
+      const phrase=event.results[i][0].transcript;
+      if(event.results[i].isFinal)finalText+=phrase;
+      else interim+=phrase;
+    }
+    input.value=(finalText||interim).trim();
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  recognition.onerror=event=>{console.warn('Reconhecimento de voz:',event.error);toast('Não foi possível reconhecer a fala. Tenta novamente.');};
+  recognition.onend=()=>{
+    button.classList.remove('listening');
+    button.disabled=false;
+    button.textContent='🎙️';
+    input.value=(finalText||input.value).trim();
+    input.focus();
+  };
+  try{recognition.start();toast('A ouvir… fala o nome do produto.');}
+  catch(e){button.classList.remove('listening');button.disabled=false;toast('Não foi possível iniciar o microfone.');}
+}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function initStores(){storeSelect.innerHTML='<option value="">-- Escolhe a loja --</option>'+stores.map(s=>'<option value="'+s[0]+'">'+s[1]+'</option>').join('');}
 async function selectStore(){
@@ -183,8 +220,9 @@ async function resolveCode(value){
     if(article){await chooseArticle(article);return;}
     $('articleSearch').value='';$('searchCard').style.display='block';
     $('associationStatus').textContent='Código não identificado: '+value+'. Escreve o nome do produto para o registar e continuar a contagem.';
-    $('searchResults').innerHTML='<div class="empty" style="padding:8px 0">Este código ainda não está associado a nenhum produto.</div><label for="newArticleDescription">Nome / descrição do produto</label><input id="newArticleDescription" type="text" maxlength="250" placeholder="Escreve o nome do produto"><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar produto e inserir quantidade</button>';
+    $('searchResults').innerHTML='<div class="empty" style="padding:8px 0">Este código ainda não está associado a nenhum produto.</div><label for="newArticleDescription">Nome / descrição do produto</label><div class="speech-row"><input id="newArticleDescription" type="text" maxlength="250" placeholder="Escreve ou diz o nome do produto"><button type="button" class="btn-outline" id="voiceNewArticle" aria-label="Ditar nome do produto" title="Falar">🎙️</button></div><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar produto e inserir quantidade</button>';
     $('newArticleDescription').focus();
+    $('voiceNewArticle').addEventListener('click',()=>startVoiceInput('newArticleDescription',$('voiceNewArticle')));
     $('saveNewArticleBtn').addEventListener('click',createNewArticle);
     $('newArticleDescription').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();createNewArticle();}});
     toast('Código não reconhecido. Introduz o nome do produto.');
@@ -240,8 +278,9 @@ async function searchArticles(){
     const createBtn=$('createArticleBtn');
     if(createBtn)createBtn.addEventListener('click',()=>{
       const suggested=$('articleSearch').value.trim();
-      $('searchResults').innerHTML='<label for="newArticleDescription" style="margin-top:10px">Descrição / nome do novo artigo</label><input id="newArticleDescription" type="text" maxlength="250" value="'+esc(suggested).replace(/"/g,'&quot;')+'" placeholder="Escreve a descrição do artigo"><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar novo artigo</button>';
+      $('searchResults').innerHTML='<label for="newArticleDescription" style="margin-top:10px">Descrição / nome do novo artigo</label><div class="speech-row"><input id="newArticleDescription" type="text" maxlength="250" value="'+esc(suggested).replace(/"/g,'&quot;')+'" placeholder="Escreve ou diz a descrição do artigo"><button type="button" class="btn-outline" id="voiceNewArticle" aria-label="Ditar nome do produto" title="Falar">🎙️</button></div><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar novo artigo</button>';
       $('newArticleDescription').focus();
+      $('voiceNewArticle').addEventListener('click',()=>startVoiceInput('newArticleDescription',$('voiceNewArticle')));
       $('saveNewArticleBtn').addEventListener('click',createNewArticle);
     });
   }catch(e){console.error(e);toast('Erro ao pesquisar artigos.');}
@@ -307,6 +346,7 @@ $('manualArticleBtn').addEventListener('click',()=>{
   $('qtyCard').style.display='none';$('searchCard').style.display='block';$('articleSearch').focus();
 });
 $('articleSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchArticles();}});
+$('voiceArticleSearch').addEventListener('click',()=>startVoiceInput('articleSearch',$('voiceArticleSearch')));
 $('searchBtn').addEventListener('click',searchArticles);
 $('addBtn').addEventListener('click',addCount);
 $('qty').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addCount();}});
