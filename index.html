@@ -181,9 +181,13 @@ async function resolveCode(value){
     const {data:article,error}=await db.from('inv_artigos').select('codigo_artigo,descricao,ativo').eq('codigo_artigo',articleCode).eq('ativo',true).limit(1).maybeSingle();
     if(error)throw error;
     if(article){await chooseArticle(article);return;}
-    $('articleSearch').value='';$('searchCard').style.display='block';$('articleSearch').focus();
-    $('associationStatus').textContent='Código lido: '+value+'. Pesquisa o produto para o associar.';
-    toast('Código não reconhecido. Escolhe o artigo para associar.');
+    $('articleSearch').value='';$('searchCard').style.display='block';
+    $('associationStatus').textContent='Código não identificado: '+value+'. Escreve o nome do produto para o registar e continuar a contagem.';
+    $('searchResults').innerHTML='<div class="empty" style="padding:8px 0">Este código ainda não está associado a nenhum produto.</div><label for="newArticleDescription">Nome / descrição do produto</label><input id="newArticleDescription" type="text" maxlength="250" placeholder="Escreve o nome do produto"><button type="button" class="btn-gold" id="saveNewArticleBtn" style="width:100%;margin-top:8px">Guardar produto e inserir quantidade</button>';
+    $('newArticleDescription').focus();
+    $('saveNewArticleBtn').addEventListener('click',createNewArticle);
+    $('newArticleDescription').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();createNewArticle();}});
+    toast('Código não reconhecido. Introduz o nome do produto.');
   }catch(e){console.error(e);toast('Erro na pesquisa: '+(e.message||e));setSync('Erro ao pesquisar o código.');}
   finally{processingCode=false;}
 }
