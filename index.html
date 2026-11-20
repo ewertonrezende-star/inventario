@@ -24,9 +24,6 @@ button{font-size:15px;font-weight:600;border:none;border-radius:10px;padding:11p
 .btn-gold{background:var(--gold);color:#241a05}
 .btn-outline{background:transparent;border:1px solid var(--line);color:var(--ink)}
 .btn-bad{background:transparent;color:var(--bad);border:1px solid var(--bad)}
-#camWrap{display:none;position:relative;border-radius:10px;overflow:hidden;background:#000}
-#camWrap video{width:100%;display:block;max-height:46vh;object-fit:cover}
-#camWrap .scanline{position:absolute;left:5%;right:5%;top:50%;height:2px;background:var(--gold);box-shadow:0 0 8px var(--gold)}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase}
@@ -67,7 +64,6 @@ button:active{transform:scale(.98)}
 .btn-bad{border-radius:10px}
 #lookupCodeBtn{flex:1.3}
 #manualArticleBtn{flex:1}
-#camBtn,#stopCam{min-height:44px}
 #qtyCard{border:2px solid #d6a52e;background:#fffdf7}
 #articleShown{font-size:17px;line-height:1.35;display:block;margin:2px 0 4px}
 #qty{font-size:22px;font-weight:750;text-align:center;max-width:145px}
@@ -86,7 +82,6 @@ small.hint{line-height:1.45;display:block;margin-top:8px}
 #scannerStatus:before{content:"";width:9px;height:9px;border-radius:50%;background:#2f7a3d;flex:0 0 9px}
 #scannerStatus.waiting:before{background:#d6a52e}
 #focusScanBtn{margin-top:8px;width:100%}
-#camWrap{margin-top:10px}
 .toast{z-index:20;top:calc(12px + env(safe-area-inset-top,0px));font-weight:650;box-shadow:0 4px 16px #0002}
 @media(min-width:560px){main{padding-top:18px}}
 
@@ -117,13 +112,7 @@ small.hint{line-height:1.45;display:block;margin-top:8px}
         <button class="btn-gold" id="lookupCodeBtn" type="button">Procurar código</button>
         <button class="btn-outline" id="manualArticleBtn" type="button">Pesquisar artigo</button>
       </div>
-      <div class="row" style="margin-top:8px">
-        <button class="btn-outline" id="camBtn" type="button">📷 Usar câmara</button>
-        <button class="btn-outline" id="stopCam" type="button" style="display:none">✕ Fechar câmara</button>
-      </div>
       <small class="hint">Modo pistola Bluetooth (HID): o Datalogic envia o código como teclado. O campo fica preparado para leitura e o Enter enviado pelo leitor confirma automaticamente. Para pesquisa manual, utiliza “Pesquisar artigo”.</small>
-      <div id="camWrap"><video id="video" playsinline muted></video><div class="scanline"></div></div>
-      <small class="hint" id="camMsg"></small>
     </div>
     <div class="card" id="searchCard" style="display:none">
       <label for="articleSearch">PESQUISAR ARTIGO PELO NOME OU CÓDIGO</label>
@@ -155,7 +144,6 @@ small.hint{line-height:1.45;display:block;margin-top:8px}
   <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
 const SUPABASE_URL='https://uacadlvvonvriiqdxdfr.supabase.co';
 const SUPABASE_KEY='sb_publishable_pBZHhN4Faqfr70_2FXqezg_UsqWu9JX';
@@ -407,25 +395,6 @@ $('clearBtn').addEventListener('click',clearCounts);
 $('refreshBtn').addEventListener('click',loadCounts);
 $('exportBtn').addEventListener('click',exportCSV);
 initStores();
-
-const zxReader=('ZXing' in window)?new ZXing.BrowserMultiFormatReader():null;
-let scanControls=null;
-async function startCam(){
-  $('camMsg').textContent='';
-  if(!zxReader){$('camMsg').textContent='Leitor de câmara indisponível. Usa a pistola ou escreve o código.';return;}
-  try{
-    $('camWrap').style.display='block';$('camBtn').style.display='none';$('stopCam').style.display='block';
-    scanControls=await zxReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},$('video'),result=>{
-      if(result){$('code').value=result.getText();lastProcessedCode='';resolveCode(result.getText());closeCam();}
-    });
-  }catch(e){$('camMsg').textContent='Não foi possível aceder à câmara. Verifica a permissão do navegador.';closeCam();}
-}
-function closeCam(){
-  try{if(scanControls&&scanControls.stop)scanControls.stop();else if(zxReader)zxReader.reset();}catch(e){}
-  scanControls=null;$('camWrap').style.display='none';$('camBtn').style.display='block';$('stopCam').style.display='none';
-}
-$('camBtn').addEventListener('click',startCam);
-$('stopCam').addEventListener('click',closeCam);
 </script>
 </body>
 </html>
