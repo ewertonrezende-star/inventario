@@ -45,134 +45,219 @@ small.hint{color:var(--muted);font-size:11.5px}
 <header><h1>📦 Contagem de inventário</h1><p>Lê com a pistola ou com a câmara do telemóvel</p></header>
 <div class="toast" id="toast"></div>
 <main>
-  <div class="card">
-    <label for="code">Código de barras</label>
-    <input id="code" type="text" inputmode="none" autocomplete="off" placeholder="Aponta a pistola e lê, ou usa a câmara" autofocus>
-    <div class="row" style="margin-top:8px">
-      <button class="btn-outline" id="camBtn" type="button">📷 Usar câmara</button>
-      <button class="btn-outline" id="stopCam" type="button" style="display:none">✕ Fechar câmara</button>
-    </div>
-    <div id="camWrap"><video id="video" playsinline muted></video><div class="scanline"></div></div>
-    <small class="hint" id="camMsg"></small>
+  <div class="card" id="storeCard">
+    <label for="storeSelect">Selecionar loja</label>
+    <select id="storeSelect" style="width:100%;font-size:17px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)">
+      <option value="">A carregar...</option>
+    </select>
+    <small class="hint" id="storeStatus">Seleciona a loja para abrir a contagem partilhada.</small>
   </div>
-
-  <div class="card" id="qtyCard" style="display:none">
-    <label>Código lido: <b id="codeShown"></b></label>
-    <div class="row">
-      <input id="qty" type="number" inputmode="numeric" placeholder="Quantidade" min="0">
-      <button class="btn-gold" id="addBtn" type="button">Adicionar</button>
+  <section id="inventoryArea" style="display:none;gap:10px;flex-direction:column">
+    <div class="card">
+      <strong id="inventoryTitle">Contagem</strong>
+      <small class="hint" id="syncStatus" style="display:block;margin-top:4px">A sincronizar...</small>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="align-items:center;margin-bottom:6px">
-      <strong style="flex:2">Lista contada (<span id="count">0</span>)</strong>
-      <button class="btn-outline" id="clearBtn" type="button">Limpar tudo</button>
+    <div class="card">
+      <label for="code">Código de barras ou artigo</label>
+      <input id="code" type="text" inputmode="none" autocomplete="off" placeholder="Lê com a pistola ou escreve o código">
+      <div class="row" style="margin-top:8px">
+        <button class="btn-outline" id="camBtn" type="button">📷 Usar câmara</button>
+        <button class="btn-outline" id="stopCam" type="button" style="display:none">✕ Fechar câmara</button>
+      </div>
+      <div id="camWrap"><video id="video" playsinline muted></video><div class="scanline"></div></div>
+      <small class="hint" id="camMsg"></small>
     </div>
-    <div id="listWrap"><div class="empty">Ainda não leste nenhum código.</div></div>
-  </div>
+    <div class="card" id="searchCard" style="display:none">
+      <label for="articleSearch">Artigo não encontrado pelo código de barras. Pesquisa pelo código ou descrição:</label>
+      <input id="articleSearch" type="text" placeholder="Código do artigo ou descrição">
+      <button class="btn-gold" id="searchBtn" type="button" style="width:100%;margin-top:8px">Pesquisar artigos</button>
+      <div id="searchResults"></div>
+    </div>
+    <div class="card" id="qtyCard" style="display:none">
+      <label>Artigo selecionado</label>
+      <strong id="articleShown"></strong>
+      <small class="hint" id="articleCodeShown" style="display:block;margin:3px 0 8px"></small>
+      <label for="qty">Quantidade</label>
+      <div class="row">
+        <input id="qty" type="number" inputmode="decimal" placeholder="Quantidade" min="0" step="any">
+        <button class="btn-gold" id="addBtn" type="button">Adicionar</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="align-items:center;margin-bottom:6px">
+        <strong style="flex:2">Artigos contados (<span id="count">0</span>)</strong>
+        <button class="btn-outline" id="refreshBtn" type="button">Atualizar</button>
+      </div>
+      <div id="listWrap"><div class="empty">Ainda não há artigos contados nesta loja.</div></div>
+      <button class="btn-bad" id="clearBtn" type="button" style="width:100%;margin-top:10px">Limpar contagem desta loja</button>
+    </div>
+  </section>
 </main>
+<div class="bar" id="bottomBar" style="display:none">
+  <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
+</div>
 <div class="bar">
   <button class="btn-gold" id="exportBtn" type="button">⬇ Exportar CSV</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
 <script>
-const codeEl=document.getElementById('code'),qtyCard=document.getElementById('qtyCard'),codeShown=document.getElementById('codeShown'),
-qtyEl=document.getElementById('qty'),addBtn=document.getElementById('addBtn'),listWrap=document.getElementById('listWrap'),
-countEl=document.getElementById('count'),toast=document.getElementById('toast'),camBtn=document.getElementById('camBtn'),
-stopCam=document.getElementById('stopCam'),camWrap=document.getElementById('camWrap'),video=document.getElementById('video'),
-camMsg=document.getElementById('camMsg');
-
-let items=JSON.parse(localStorage.getItem('inv_items')||'[]');
-let stream=null, detecting=false;
-
-function save(){localStorage.setItem('inv_items',JSON.stringify(items));}
-function showToast(msg){toast.textContent=msg;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),1200);}
-
-function render(){
-  countEl.textContent=items.length;
-  if(!items.length){listWrap.innerHTML='<div class="empty">Ainda não leste nenhum código.</div>';return;}
-  let rows=items.map((it,i)=>`<tr><td>${it.code}</td><td class="qty">${it.qty}</td><td class="del"><span onclick="removeItem(${i})">Apagar</span></td></tr>`).join('');
-  listWrap.innerHTML=`<table><thead><tr><th>Código</th><th>Qtd</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+const SUPABASE_URL='https://uacadlvvonvriiqdxdfr.supabase.co';
+const SUPABASE_KEY='sb_publishable_pBZHhN4Faqfr70_2FXqezg_UsqWu9JX';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+const stores=[['AL','Albarraque'],['AM','Arneiro Marinheiro'],['CO','Colares'],['MM','Mem Martins'],['LC','Sintra'],['SA','Sabugo']];
+const $=id=>document.getElementById(id);
+const storeSelect=$('storeSelect'),storeStatus=$('storeStatus'),inventoryArea=$('inventoryArea');
+let inventory=null, scannedBarcode='', selectedArticle=null, countRows=[], refreshTimer=null, deviceId=localStorage.getItem('inv_device_id');
+if(!deviceId){deviceId=(crypto.randomUUID?crypto.randomUUID():('device-'+Date.now()+'-'+Math.random().toString(16).slice(2)));localStorage.setItem('inv_device_id',deviceId);}
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
+function setSync(msg){$('syncStatus').textContent=msg;}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function initStores(){storeSelect.innerHTML='<option value="">-- Escolhe a loja --</option>'+stores.map(s=>'<option value="'+s[0]+'">'+s[1]+'</option>').join('');}
+async function selectStore(){
+  const code=storeSelect.value;
+  if(!code){inventory=null;inventoryArea.style.display='none';$('bottomBar').style.display='none';if(refreshTimer)clearInterval(refreshTimer);return;}
+  storeSelect.disabled=true;storeStatus.textContent='A abrir contagem de '+stores.find(s=>s[0]===code)[1]+'...';
+  try{
+    const {data:found,error:findError}=await db.from('inv_inventarios').select('*').eq('loja',code).eq('estado','aberto').order('criado_em',{ascending:false}).limit(1).maybeSingle();
+    if(findError)throw findError;
+    if(found){inventory=found;}
+    else{
+      const label=stores.find(s=>s[0]===code)[1];
+      const {data:created,error:createError}=await db.from('inv_inventarios').insert({loja:code,nome:'Inventário - '+label,estado:'aberto'}).select().single();
+      if(createError)throw createError;
+      inventory=created;
+    }
+    $('inventoryTitle').textContent='Inventário — '+(stores.find(s=>s[0]===code)[1]);
+    storeStatus.textContent='Loja selecionada: '+stores.find(s=>s[0]===code)[1];
+    inventoryArea.style.display='flex';$('bottomBar').style.display='flex';
+    await loadCounts();
+    if(refreshTimer)clearInterval(refreshTimer);
+    refreshTimer=setInterval(loadCounts,4000);
+    $('code').focus();
+  }catch(e){
+    console.error(e);storeStatus.textContent='Erro ao abrir inventário: '+(e.message||e);toast('Não foi possível abrir a loja.');
+  }finally{storeSelect.disabled=false;}
 }
-window.removeItem=function(i){items.splice(i,1);save();render();}
+async function loadCounts(){
+  if(!inventory)return;
+  try{
+    const {data,error}=await db.from('inv_contagens').select('id,inventario_id,codigo_artigo,codigo_barras_lido,quantidade,contado_em').eq('inventario_id',inventory.id).order('contado_em',{ascending:true});
+    if(error)throw error;
+    countRows=data||[];
+    const codes=[...new Set(countRows.map(r=>r.codigo_artigo).filter(Boolean))];
+    let articles={};
+    if(codes.length){
+      const {data:arts,error:artErr}=await db.from('inv_artigos').select('codigo_artigo,descricao').in('codigo_artigo',codes);
+      if(artErr)throw artErr;
+      (arts||[]).forEach(a=>articles[a.codigo_artigo]=a.descricao);
+    }
+    const grouped={};
+    countRows.forEach(r=>{
+      const key=r.codigo_artigo||r.codigo_barras_lido||'Sem código';
+      if(!grouped[key])grouped[key]={code:key,description:articles[key]||'',qty:0};
+      grouped[key].qty+=Number(r.quantidade||0);
+    });
+    const rows=Object.values(grouped);
+    $('count').textContent=rows.length;
+    if(!rows.length){$('listWrap').innerHTML='<div class="empty">Ainda não há artigos contados nesta loja.</div>';setSync('Sincronizado · '+new Date().toLocaleTimeString('pt-PT'));return;}
+    $('listWrap').innerHTML='<table><thead><tr><th>Artigo</th><th>Descrição</th><th>Qtd</th><th></th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.code)+'</td><td>'+esc(r.description)+'</td><td class="qty">'+r.qty+'</td><td class="del"><span data-delete="'+esc(r.code)+'">Apagar</span></td></tr>').join('')+'</tbody></table>';
+    $('listWrap').querySelectorAll('[data-delete]').forEach(el=>el.addEventListener('click',()=>deleteArticle(el.getAttribute('data-delete'))));
+    setSync('Sincronizado · '+new Date().toLocaleTimeString('pt-PT')+' · Atualização automática');
+  }catch(e){console.error(e);setSync('Falha na sincronização: '+(e.message||e));}
+}
+async function resolveCode(value){
+  scannedBarcode=value;selectedArticle=null;$('searchCard').style.display='none';$('qtyCard').style.display='none';
+  try{
+    let articleCode=value;
+    const {data:barcode,error:barcodeErr}=await db.from('inv_codigos_barras').select('codigo_artigo').eq('codigo_barras',value).limit(1).maybeSingle();
+    if(barcodeErr)throw barcodeErr;
+    if(barcode&&barcode.codigo_artigo)articleCode=barcode.codigo_artigo;
+    const {data:article,error}=await db.from('inv_artigos').select('codigo_artigo,descricao,ativo').eq('codigo_artigo',articleCode).eq('ativo',true).limit(1).maybeSingle();
+    if(error)throw error;
+    if(article){chooseArticle(article);return;}
+    $('articleSearch').value=value;$('searchCard').style.display='block';$('articleSearch').focus();
+    toast('Código não encontrado. Pesquisa o artigo.');
+  }catch(e){console.error(e);toast('Erro na pesquisa: '+(e.message||e));}
+}
+function chooseArticle(article){
+  selectedArticle=article;$('articleShown').textContent=article.descricao||article.codigo_artigo;
+  $('articleCodeShown').textContent='Código: '+article.codigo_artigo+' · Código lido: '+scannedBarcode;
+  $('searchCard').style.display='none';$('qtyCard').style.display='block';$('qty').value='';$('qty').focus();
+}
+async function searchArticles(){
+  const term=$('articleSearch').value.trim();if(!term)return;
+  try{
+    const [byCode,byDesc]=await Promise.all([
+      db.from('inv_artigos').select('codigo_artigo,descricao,ativo').eq('ativo',true).ilike('codigo_artigo','%'+term+'%').limit(15),
+      db.from('inv_artigos').select('codigo_artigo,descricao,ativo').eq('ativo',true).ilike('descricao','%'+term+'%').limit(15)
+    ]);
+    if(byCode.error)throw byCode.error;if(byDesc.error)throw byDesc.error;
+    const unique=new Map();[...(byCode.data||[]),...(byDesc.data||[])].forEach(a=>unique.set(a.codigo_artigo,a));
+    const results=[...unique.values()];
+    $('searchResults').innerHTML=results.length?results.map((a,i)=>'<button type="button" class="btn-outline" data-article="'+i+'" style="width:100%;text-align:left;margin-top:6px">'+esc(a.codigo_artigo)+' — '+esc(a.descricao)+'</button>').join(''):'<div class="empty">Não foram encontrados artigos ativos.</div>';
+    $('searchResults').querySelectorAll('[data-article]').forEach(el=>el.addEventListener('click',()=>chooseArticle(results[Number(el.dataset.article)])));
+  }catch(e){console.error(e);toast('Erro ao pesquisar artigos.');}
+}
+async function addCount(){
+  if(!inventory||!selectedArticle)return;
+  const quantity=Number($('qty').value);
+  if(!Number.isFinite(quantity)||quantity<=0){toast('Indica uma quantidade válida.');return;}
+  try{
+    const {error}=await db.from('inv_contagens').insert({inventario_id:inventory.id,codigo_artigo:selectedArticle.codigo_artigo,codigo_barras_lido:scannedBarcode,quantidade:quantity,dispositivo_id:deviceId});
+    if(error)throw error;
+    toast('Contagem guardada: '+selectedArticle.codigo_artigo);
+    selectedArticle=null;$('qtyCard').style.display='none';$('code').value='';$('code').focus();
+    await loadCounts();
+  }catch(e){console.error(e);toast('Não foi possível guardar: '+(e.message||e));}
+}
+async function deleteArticle(code){
+  if(!inventory||!confirm('Apagar todas as contagens deste artigo nesta loja?'))return;
+  try{const {error}=await db.from('inv_contagens').delete().eq('inventario_id',inventory.id).eq('codigo_artigo',code);if(error)throw error;await loadCounts();toast('Artigo apagado.');}
+  catch(e){console.error(e);toast('Erro ao apagar artigo.');}
+}
+async function clearCounts(){
+  if(!inventory||!confirm('Apagar todas as contagens desta loja? Esta ação afeta todos os telemóveis ligados a esta loja.'))return;
+  try{const {error}=await db.from('inv_contagens').delete().eq('inventario_id',inventory.id);if(error)throw error;await loadCounts();toast('Contagem limpa.');}
+  catch(e){console.error(e);toast('Erro ao limpar contagem.');}
+}
+function exportCSV(){
+  if(!countRows.length){toast('Lista vazia');return;}
+  const csv='Artigo;Código de barras;Quantidade;Data\n'+countRows.map(r=>[r.codigo_artigo,r.codigo_barras_lido,r.quantidade,r.contado_em].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='inventario-'+(inventory?inventory.loja:'loja')+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+$('storeSelect').addEventListener('change',selectStore);
+$('code').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const v=$('code').value.trim();if(v)resolveCode(v);}});
+$('articleSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchArticles();}});
+$('searchBtn').addEventListener('click',searchArticles);
+$('addBtn').addEventListener('click',addCount);
+$('qty').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addCount();}});
+$('clearBtn').addEventListener('click',clearCounts);
+$('refreshBtn').addEventListener('click',loadCounts);
+$('exportBtn').addEventListener('click',exportCSV);
+initStores();
 
-function focusCode(){codeEl.value='';qtyCard.style.display='none';codeEl.focus();}
-
-codeEl.addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    e.preventDefault();
-    const v=codeEl.value.trim();
-    if(!v)return;
-    codeShown.textContent=v;
-    qtyCard.style.display='block';
-    qtyEl.value='';
-    qtyEl.focus();
-  }
-});
-qtyEl.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addBtn.click();}});
-addBtn.addEventListener('click',()=>{
-  const code=codeShown.textContent, qty=parseFloat(qtyEl.value);
-  if(!code||isNaN(qty))return;
-  const existing=items.find(it=>it.code===code);
-  if(existing)existing.qty+=qty; else items.push({code,qty});
-  save();render();showToast('Adicionado: '+code);
-  focusCode();
-});
-document.getElementById('clearBtn').addEventListener('click',()=>{
-  if(confirm('Apagar toda a lista contada?')){items=[];save();render();}
-});
-
-// Camera scanning (ZXing: funciona em Chrome Android e Safari/iOS)
-const zxReader = ('ZXing' in window) ? new ZXing.BrowserMultiFormatReader() : null;
+const zxReader=('ZXing' in window)?new ZXing.BrowserMultiFormatReader():null;
 let scanControls=null;
 async function startCam(){
-  camMsg.textContent='';
-  if(!zxReader){
-    camMsg.textContent='Não foi possível carregar o leitor de câmara. Tenta recarregar a página, ou usa a pistola.';
-    return;
-  }
+  $('camMsg').textContent='';
+  if(!zxReader){$('camMsg').textContent='Leitor de câmara indisponível. Usa a pistola ou escreve o código.';return;}
   try{
-    camWrap.style.display='block'; camBtn.style.display='none'; stopCam.style.display='block';
-    scanControls = await zxReader.decodeFromConstraints(
-      {video:{facingMode:{ideal:'environment'}}},
-      video,
-      (result)=>{
-        if(result){
-          codeEl.value=result.getText();
-          codeEl.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}));
-          closeCam();
-        }
-      }
-    );
-  }catch(e){
-    camMsg.textContent='Não foi possível aceder à câmara. Verifica se deste permissão ao navegador nas definições.';
-    camWrap.style.display='none'; camBtn.style.display='block'; stopCam.style.display='none';
-  }
+    $('camWrap').style.display='block';$('camBtn').style.display='none';$('stopCam').style.display='block';
+    scanControls=await zxReader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}}},$('video'),result=>{
+      if(result){$('code').value=result.getText();resolveCode(result.getText());closeCam();}
+    });
+  }catch(e){$('camMsg').textContent='Não foi possível aceder à câmara. Verifica a permissão do navegador.';closeCam();}
 }
 function closeCam(){
-  try{ if(scanControls&&scanControls.stop) scanControls.stop(); else if(zxReader) zxReader.reset(); }catch(e){}
-  scanControls=null;
-  camWrap.style.display='none'; camBtn.style.display='block'; stopCam.style.display='none';
+  try{if(scanControls&&scanControls.stop)scanControls.stop();else if(zxReader)zxReader.reset();}catch(e){}
+  scanControls=null;$('camWrap').style.display='none';$('camBtn').style.display='block';$('stopCam').style.display='none';
 }
-camBtn.addEventListener('click',startCam);
-stopCam.addEventListener('click',closeCam);
-
-// Export
-document.getElementById('exportBtn').addEventListener('click',async()=>{
-  if(!items.length){showToast('Lista vazia');return;}
-  let csv='Codigo;Quantidade\n'+items.map(it=>`${it.code};${it.qty}`).join('\n');
-  const downloads=await claude.use('downloads');
-  if(downloads){
-    await downloads.save({filename:'contagem-inventario.csv',data:csv});
-  } else {
-    const blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);a.download='contagem-inventario.csv';a.click();
-  }
-});
-
-render();
+$('camBtn').addEventListener('click',startCam);
+$('stopCam').addEventListener('click',closeCam);
 </script>
 </body>
 </html>
