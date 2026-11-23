@@ -149,10 +149,12 @@ function CountPage() {
       if (existing && existing.codigo_artigo !== article.codigo_artigo) {
         throw new Error("Este código de barras já está associado a outro artigo. Contacta a Central.");
       }
-      if (!existing) {
+      if (!existing && profile?.perfil === "central") {
         const { error } = await db.from("inv_codigos_barras").insert({ codigo_barras: code, codigo_artigo: article.codigo_artigo });
         if (error) throw error;
         toast.success("Código de barras associado ao artigo.");
+      } else if (!existing) {
+        toast.info("A leitura será guardada. A associação permanente deste código deve ser feita pela Central.");
       }
     }
     setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
