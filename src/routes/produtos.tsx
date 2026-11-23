@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
 import { parsePrimaveraRows, type PrimaveraImport } from "@/lib/inventory";
+import { useAuth } from "@/lib/auth";
+import { LoginForm } from "@/components/LoginForm";
 
 const db = supabase as any;
 
@@ -20,6 +22,7 @@ async function upsertBatches(table: string, rows: any[], onConflict: string) {
 }
 
 function ProductsPage() {
+  const { session, profile, loading: authLoading, profileError } = useAuth();
   const [articleCount, setArticleCount] = useState<number | null>(null);
   const [stockCount, setStockCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,7 +39,7 @@ function ProductsPage() {
     if (stocks.error) toast.error(stocks.error.message);
     else setStockCount(stocks.count ?? 0);
   }
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { if (profile?.perfil === "central") void refresh(); }, [profile]);
 
   async function readFile(file: File) {
     setBusy(true); setPreview(null);
@@ -68,6 +71,10 @@ function ProductsPage() {
       toast.error(`A importação foi interrompida: ${e.message ?? e}. Verifica as permissões e volta a importar o mesmo ficheiro; os registos são atualizados por chave, não acumulados.`);
     } finally { setBusy(false); }
   }
+
+  if (authLoading) return <main className="px-4 py-16 text-center text-muted-foreground">A verificar sessão…</main>;
+  if (!session) return <LoginForm />;
+  if (!profile || profile.perfil !== "central") return <main className="mx-auto max-w-xl px-4 py-16 text-center"><h1 className="text-2xl font-bold">Acesso reservado à Central</h1><p className="mt-2 text-muted-foreground">{profileError ?? "Só um utilizador ativo com perfil central pode importar a base Primavera."}</p></main>;
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
