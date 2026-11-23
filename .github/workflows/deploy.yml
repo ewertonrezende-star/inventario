@@ -1,6 +1,4 @@
 name: Publicar Inventário Coopsintra no GitHub Pages
-# Publicação exclusiva por GitHub Actions
-
 on:
   push:
     branches: [main]
@@ -27,23 +25,25 @@ jobs:
           bun-version: latest
       - name: Instalar dependências
         run: bun install --frozen-lockfile
-      - name: Construir aplicação estática
+      - name: Construir aplicação
         run: bun run build
         env:
+          BASE_PATH: /inventario/
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      - name: Localizar e validar ficheiros publicados
+      - name: Validar e preparar ficheiros do Pages
         run: |
           if [ -f dist/client/index.html ]; then PAGES_DIR=dist/client;
           elif [ -f .output/public/index.html ]; then PAGES_DIR=.output/public;
           elif [ -f dist/index.html ]; then PAGES_DIR=dist;
           else echo "Não foi encontrado o index.html gerado pelo build."; find . -maxdepth 4 -name index.html -print; exit 1; fi
           if grep -q "Inventário – Scan" "$PAGES_DIR/index.html"; then echo "Foi detetado o HTML antigo na publicação."; exit 1; fi
-          if ! grep -qi "<script" "$PAGES_DIR/index.html" || ! grep -q "assets/" "$PAGES_DIR/index.html"; then echo "O HTML publicado não contém os scripts da aplicação; a publicação foi cancelada para evitar página em branco."; sed -n "1,100p" "$PAGES_DIR/index.html"; exit 1; fi
-          echo "PAGES_DIR=$PAGES_DIR" >> "$GITHUB_ENV"
+          if ! grep -qi "<script" "$PAGES_DIR/index.html" || ! grep -q "assets/" "$PAGES_DIR/index.html"; then echo "O HTML publicado não contém os scripts da aplicação."; sed -n "1,100p" "$PAGES_DIR/index.html"; exit 1; fi
+          cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
           touch "$PAGES_DIR/.nojekyll"
+          echo "PAGES_DIR=$PAGES_DIR" >> "$GITHUB_ENV"
           echo "A publicar a pasta: $PAGES_DIR"
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
