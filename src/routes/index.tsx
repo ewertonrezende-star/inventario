@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { STORES } from "@/lib/inventory";
+import { useAuth } from "@/lib/auth";
+import { LoginForm } from "@/components/LoginForm";
 
 const db = supabase as any;
 
@@ -15,6 +17,7 @@ type Article = { codigo_artigo: string; descricao: string };
 type CountEntry = { id: string; codigo_artigo: string; descricao: string; quantidade: number; contado_em: string };
 
 function CountPage() {
+  const { session, profile, loading: authLoading, profileError } = useAuth();
   const [name, setName] = useState("");
   const [store, setStore] = useState("");
   const [inventory, setInventory] = useState<any>(null);
@@ -33,11 +36,17 @@ function CountPage() {
 
   useEffect(() => {
     setName(localStorage.getItem("inv_name") ?? "");
-    setStore(localStorage.getItem("inv_store") ?? "");
     let id = localStorage.getItem("inv_device_id");
     if (!id) { id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `device-${Date.now()}`; localStorage.setItem("inv_device_id", id); }
     deviceId.current = id;
   }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+    if (!name && profile.nome) setName(profile.nome);
+    const preferred = profile.perfil === "central" ? (localStorage.getItem("inv_store") ?? "") : profile.loja;
+    setStore(preferred);
+  }, [profile]);
 
   const loadCounts = useCallback(async (inventoryId: string) => {
     const { data, error } = await db.from("inv_contagens")
@@ -63,6 +72,7 @@ function CountPage() {
   }, []);
 
   async function openStore(nextStore: string) {
+    if (nextStore && profile && profile.perfil !== "central" && profile.loja !== nextStore) { toast.error("Este utilizador só pode contar na loja atribuída."); return; }
     if (!nextStore) { setStore(""); setInventory(null); setEntries([]); if (timerRef.current) clearInterval(timerRef.current); return; }
     setBusy(true);
     try {
@@ -114,11 +124,10 @@ function CountPage() {
         return;
       }
       if (quick) {
-        const { data: auth } = await db.auth.getUser();
         const { error: saveError } = await db.from("inv_contagens").insert({
           inventario_id: inventory.id, codigo_artigo: article.codigo_artigo,
           codigo_barras_lido: scanned, quantidade: 1,
-          utilizador_id: auth?.user?.id ?? null, dispositivo_id: deviceId.current || null,
+          utilizador_id: session?.user?.id ?? null, dispositivo_id: deviceId.current || null,
         });
         if (saveError) throw saveError;
         setCode("");
@@ -157,7 +166,6 @@ function CountPage() {
     if (!Number.isFinite(quantity) || quantity < 0) { toast.error("Indica uma quantidade válida."); return; }
     setBusy(true);
     try {
-      const { data: auth } = await db.auth.getUser();
       const { error } = await db.from("inv_contagens").insert({
         inventario_id: inventory.id, codigo_artigo: current.codigo_artigo,
         codigo_barras_lido: code || null, quantidade,
@@ -180,6 +188,11 @@ function CountPage() {
 
   const totalUnits = entries.reduce((sum, row) => sum + row.quantidade, 0);
   const storeName = STORES.find((s) => s.code === store)?.name;
+  const availableStores = profile?.perfil === "central" ? STORES : STORES.filter((s) => s.code === profile?.loja);
+
+  if (authLoading) return <main className="mx-auto max-w-5xl px-4 py-16 text-center text-muted-foreground">A verificar sessão…</main>;
+  if (!session) return <LoginForm />;
+  if (!profile) return <main className="mx-auto max-w-xl px-4 py-16 text-center"><h1 className="text-2xl font-bold">Acesso não configurado</h1><p className="mt-2 text-muted-foreground">{profileError ?? "Este utilizador não tem um perfil ativo em inv_perfis. Contacta a Central."}</p></main>;
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
@@ -192,10 +205,10 @@ function CountPage() {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h2 className="font-bold">Identificação</h2>
           <label className="mt-4 block text-sm font-medium">Responsável pela contagem</label>
-          <input value={name} onChange={(e) => { setName(e.target.value); localStorage.setItem("inv_name", e.target.value); }} placeholder="Nome do colaborador" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
+          <input value={name} readOnly={profile.perfil !== "central" && !!profile.nome} onChange={(e) => { setName(e.target.value); localStorage.setItem("inv_name", e.target.value); }} placeholder="Nome do colaborador" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
           <label className="mt-4 block text-sm font-medium">Loja / armazém</label>
           <select value={store} disabled={busy} onChange={(e) => void openStore(e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-3">
-            <option value="">Selecionar loja</option>{STORES.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+            <option value="">Selecionar loja</option>{availableStores.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
           </select>
           {inventory && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Inventário ativo: <strong>{inventory.nome}</strong></p>}
         </div>
