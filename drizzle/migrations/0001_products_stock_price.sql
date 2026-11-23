@@ -1,1 +1,0 @@
-ALTER TABLE public.products ADD COLUMN stock numeric, ADD COLUMN price numeric;
