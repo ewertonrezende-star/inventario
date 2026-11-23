@@ -1,4 +1,5 @@
 name: Publicar Inventário Coopsintra no GitHub Pages
+# Publicação exclusiva por GitHub Actions
 
 on:
   push:
