@@ -141,6 +141,23 @@ function CountPage() {
     finally { setBusy(false); }
   }
 
+  async function chooseArticle(article: Article) {
+    if (code && code !== article.codigo_artigo) {
+      const { data: existing, error: lookupError } = await db.from("inv_codigos_barras")
+        .select("codigo_artigo").eq("codigo_barras", code).limit(1).maybeSingle();
+      if (lookupError) throw lookupError;
+      if (existing && existing.codigo_artigo !== article.codigo_artigo) {
+        throw new Error("Este código de barras já está associado a outro artigo. Contacta a Central.");
+      }
+      if (!existing) {
+        const { error } = await db.from("inv_codigos_barras").insert({ codigo_barras: code, codigo_artigo: article.codigo_artigo });
+        if (error) throw error;
+        toast.success("Código de barras associado ao artigo.");
+      }
+    }
+    setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
+  }
+
   async function searchArticles() {
     const term = search.trim();
     if (!term) return;
@@ -228,7 +245,7 @@ function CountPage() {
 
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <h2 className="font-bold">Pesquisa manual</h2><div className="mt-3 flex gap-2"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchArticles(); }} placeholder="Código do artigo ou descrição" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" /><button disabled={busy} onClick={() => void searchArticles()} className="rounded-lg border px-4 py-2 font-semibold">Pesquisar</button></div>
-            {results.length > 0 && <div className="mt-3 grid gap-2">{results.map((a) => <button key={a.codigo_artigo} onClick={() => { setCurrent(a); setCode(""); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50); }} className="rounded-lg border p-3 text-left hover:bg-muted"><span className="font-mono text-sm">{a.codigo_artigo}</span><span className="ml-3 font-semibold">{a.descricao}</span></button>)}</div>}
+            {results.length > 0 && <div className="mt-3 grid gap-2">{results.map((a) => <button key={a.codigo_artigo} onClick={() => void chooseArticle(a).catch((e) => toast.error(e.message))} className="rounded-lg border p-3 text-left hover:bg-muted"><span className="font-mono text-sm">{a.codigo_artigo}</span><span className="ml-3 font-semibold">{a.descricao}</span></button>)}</div>}
           </div>
         </div>
       </section>
