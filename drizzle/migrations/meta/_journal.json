@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1795436208162,
+      "tag": "0000_inventario",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795436326198,
+      "tag": "0001_products_stock_price",
+      "breakpoints": true
+    }
+  ]
+}
