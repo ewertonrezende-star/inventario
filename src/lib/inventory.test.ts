@@ -15,7 +15,7 @@ describe("Inventário Coopsintra", () => {
       { inventario_id: "inv-al", codigo_artigo: "A1", codigo_barras_lido: "5601", quantidade: 3, utilizador_id: null, dispositivo_id: null, contado_em: "" },
       { inventario_id: "inv-al", codigo_artigo: "A1", codigo_barras_lido: "5601", quantidade: 2, utilizador_id: null, dispositivo_id: null, contado_em: "" },
       { inventario_id: "inv-co", codigo_artigo: "A1", codigo_barras_lido: "5601", quantidade: 5, utilizador_id: null, dispositivo_id: null, contado_em: "" },
-    ]);
+    ], inventories);
     expect(merged.find((r) => r.loja === "AL")?.contado).toBe(5);
     expect(merged.find((r) => r.loja === "CO")?.contado).toBe(5);
   });
