@@ -12,6 +12,8 @@ Foi criada uma cópia de segurança antes da adaptação: `backup/pre-adaptacao-
 
 ## Funcionalidades
 
+- Autenticação por email/palavra-passe do Supabase e perfil ativo em `inv_perfis`.
+- Utilizadores de loja limitados à sua sigla; perfil `central` pode consultar e gerir todas as lojas.
 - Contagem por loja com leitura de códigos de barras e pesquisa manual por código de artigo/descrição.
 - Modo rápido: cada leitura adiciona uma unidade.
 - Sincronização das contagens através do Supabase.
@@ -69,7 +71,7 @@ O projeto usa TanStack Start em modo SPA para permitir alojamento estático no G
 3. constrói o shell SPA com base `/inventario/`;
 4. publica os ficheiros estáticos no GitHub Pages.
 
-A chave `sb_publishable` é uma chave pública destinada ao browser. A segurança dos dados depende das políticas RLS do Supabase. Nunca colocar uma chave `service_role` em código cliente, em variáveis `VITE_*` ou no GitHub.
+A chave `sb_publishable` é uma chave pública destinada ao browser. A segurança dos dados depende das políticas RLS do Supabase. Nunca colocar uma chave `service_role` em código cliente, em variáveis `VITE_*` ou no GitHub. O workflow usa o URL e a chave pública do projeto configurado; não contém credenciais administrativas.
 
 ## Histórico de branches
 
