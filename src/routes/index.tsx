@@ -169,7 +169,7 @@ function CountPage() {
       const { error } = await db.from("inv_contagens").insert({
         inventario_id: inventory.id, codigo_artigo: current.codigo_artigo,
         codigo_barras_lido: code || null, quantidade,
-        utilizador_id: auth?.user?.id ?? null, dispositivo_id: deviceId.current || null,
+        utilizador_id: session?.user?.id ?? null, dispositivo_id: deviceId.current || null,
       });
       if (error) throw error;
       toast.success(`Contagem guardada: ${current.codigo_artigo}`);
