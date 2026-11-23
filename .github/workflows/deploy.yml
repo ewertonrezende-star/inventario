@@ -40,6 +40,7 @@ jobs:
           elif [ -f dist/index.html ]; then PAGES_DIR=dist;
           else echo "Não foi encontrado o index.html gerado pelo build."; find . -maxdepth 4 -name index.html -print; exit 1; fi
           if grep -q "Inventário – Scan" "$PAGES_DIR/index.html"; then echo "Foi detetado o HTML antigo na publicação."; exit 1; fi
+          if ! grep -qi "<script" "$PAGES_DIR/index.html" || ! grep -q "assets/" "$PAGES_DIR/index.html"; then echo "O HTML publicado não contém os scripts da aplicação; a publicação foi cancelada para evitar página em branco."; sed -n "1,100p" "$PAGES_DIR/index.html"; exit 1; fi
           echo "PAGES_DIR=$PAGES_DIR" >> "$GITHUB_ENV"
           touch "$PAGES_DIR/.nojekyll"
           echo "A publicar a pasta: $PAGES_DIR"
