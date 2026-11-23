@@ -12,9 +12,14 @@ export function LoginForm() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true); setError("");
-    const message = await signIn(email, password);
-    if (message) setError(message);
-    setBusy(false);
+    try {
+      const message = await signIn(email, password);
+      if (message) setError(message);
+    } catch (e: any) {
+      setError(e.message ?? "Não foi possível iniciar sessão.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
