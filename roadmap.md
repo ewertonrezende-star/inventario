@@ -1,0 +1,2 @@
+- [x] App de inventário (contagem, consolidado)
+- [x] Importar Excel: cod barras, artigo, descrição, stock, valor €
