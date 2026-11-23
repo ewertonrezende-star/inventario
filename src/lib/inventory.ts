@@ -109,6 +109,7 @@ export function parsePrimaveraRows(rows: unknown[][]): PrimaveraImport {
   const storeCodes = new Set(STORES.map((s) => s.code));
   const articles = new Map<string, PrimaveraArticle>();
   const barcodes = new Map<string, PrimaveraBarcode>();
+  const barcodeOwners = new Map<string, string>();
   const stocks = new Map<string, PrimaveraStock>();
   let rowsRead = 0, rowsSkipped = 0, duplicateStocks = 0;
   const now = new Date().toISOString();
@@ -126,7 +127,14 @@ export function parsePrimaveraRows(rows: unknown[][]): PrimaveraImport {
     articles.set(codigo_artigo, { codigo_artigo, descricao, preco_custo, ativo: true, atualizado_em: now });
 
     const barcode = col.barcode >= 0 ? String(row[col.barcode] ?? "").trim() : "";
-    if (barcode) barcodes.set(`${barcode}|${codigo_artigo}`, { codigo_barras: barcode, codigo_artigo });
+    if (barcode) {
+      const owner = barcodeOwners.get(barcode);
+      if (owner && owner !== codigo_artigo) {
+        throw new Error("O código de barras " + barcode + " aparece associado aos artigos " + owner + " e " + codigo_artigo + ". Corrige o Excel antes de importar.");
+      }
+      barcodeOwners.set(barcode, codigo_artigo);
+      barcodes.set(`${barcode}|${codigo_artigo}`, { codigo_barras: barcode, codigo_artigo });
+    }
 
     const stockKey = `${codigo_artigo}|${armazem}`;
     if (stocks.has(stockKey)) duplicateStocks++;
