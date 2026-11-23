@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,14 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let alive = true;
     setProfile(null);
     setProfileError(null);
-    if (!session?.user?.id) return;
+    if (!session?.user?.id) { setProfileLoading(false); return; }
+    setProfileLoading(true);
     db.from("inv_perfis").select("user_id,nome,loja,perfil,ativo")
       .eq("user_id", session.user.id).eq("ativo", true).maybeSingle()
       .then(({ data, error }: any) => {
         if (!alive) return;
         if (error) setProfileError(error.message);
         setProfile(data ?? null);
-      });
+      })
+      .finally(() => { if (alive) setProfileLoading(false); });
     return () => { alive = false; };
   }, [session?.user?.id]);
 
@@ -69,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) setProfileError(error.message);
   }
 
-  return <AuthContext.Provider value={{ session, profile, loading, profileError, signIn, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, profile, loading: loading || profileLoading, profileError, signIn, signOut }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
