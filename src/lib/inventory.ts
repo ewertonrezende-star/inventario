@@ -3,43 +3,140 @@ export const STORES = [
   { code: "AM", name: "Arneiro Marinheiro" },
   { code: "CO", name: "Colares" },
   { code: "MM", name: "Mem Martins" },
-  { code: "SA", name: "Sabugo" },
   { code: "LC", name: "Sintra" },
+  { code: "SA", name: "Sabugo" },
   { code: "CC", name: "Armazém Central" },
 ] as const;
 
-export type CountRow = { store_code: string; barcode: string; quantity: number; counter_name: string };
-export type MergedRow = { store_code: string; barcode: string; total: number; counters: string[] };
+export type StoreCode = (typeof STORES)[number]["code"];
+export type CountRow = {
+  inventario_id: string;
+  codigo_artigo: string;
+  codigo_barras_lido: string | null;
+  quantidade: number;
+  utilizador_id: string | null;
+  dispositivo_id: string | null;
+  contado_em: string;
+};
+export type MergedRow = {
+  loja: string;
+  inventario_id: string;
+  codigo_artigo: string;
+  descricao: string;
+  contado: number;
+  stock: number | null;
+  stockOriginal: number | null;
+  preco: number | null;
+  utilizadores: string[];
+};
 
-/** Junta as contagens de várias pessoas: soma por loja + código de barras. */
-export function mergeCounts(rows: CountRow[]): MergedRow[] {
+export function mergeCounts(rows: CountRow[], inventories: Map<string, { loja: string; id: string }>, names = new Map<string, string>()) {
   const map = new Map<string, MergedRow>();
-  for (const r of rows) {
-    const key = `${r.store_code}|${r.barcode}`;
-    const m = map.get(key) ?? { store_code: r.store_code, barcode: r.barcode, total: 0, counters: [] };
-    m.total += Number(r.quantity);
-    if (!m.counters.includes(r.counter_name)) m.counters.push(r.counter_name);
-    map.set(key, m);
+  for (const row of rows) {
+    const inv = inventories.get(row.inventario_id);
+    if (!inv) continue;
+    const key = `${inv.loja}|${row.codigo_artigo}`;
+    const current = map.get(key) ?? {
+      loja: inv.loja, inventario_id: inv.id, codigo_artigo: row.codigo_artigo,
+      descricao: "", contado: 0, stock: null, stockOriginal: null, preco: null, utilizadores: [],
+    };
+    current.contado += Number(row.quantidade || 0);
+    const person = row.utilizador_id ? (names.get(row.utilizador_id) ?? row.utilizador_id.slice(0, 8)) : "Contagem";
+    if (!current.utilizadores.includes(person)) current.utilizadores.push(person);
+    map.set(key, current);
   }
-  return [...map.values()].sort((a, b) => a.store_code.localeCompare(b.store_code) || a.barcode.localeCompare(b.barcode));
+  return [...map.values()].sort((a, b) => a.loja.localeCompare(b.loja) || a.codigo_artigo.localeCompare(b.codigo_artigo));
 }
 
-export type ProductImport = { barcode: string; reference: string; description: string; stock: number | null; price: number | null };
+export type PrimaveraArticle = { codigo_artigo: string; descricao: string; preco_custo: number | null; ativo: boolean; atualizado_em: string };
+export type PrimaveraBarcode = { codigo_barras: string; codigo_artigo: string };
+export type PrimaveraStock = { codigo_artigo: string; armazem: string; stock_atual: number; atualizado_em: string };
+export type PrimaveraImport = {
+  articles: PrimaveraArticle[];
+  barcodes: PrimaveraBarcode[];
+  stocks: PrimaveraStock[];
+  rowsRead: number;
+  rowsSkipped: number;
+  duplicateStocks: number;
+};
 
-function num(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "number") return v;
-  const n = Number(String(v).replace(/[€\s]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : null;
+function normalize(value: unknown): string {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Linhas do Excel por esta ordem: cód. barras, artigo, descrição, stock, valor €. Ignora cabeçalho. */
-export function parseProductRows(rows: unknown[][]): ProductImport[] {
-  const uniq = new Map<string, ProductImport>();
-  for (const r of rows) {
-    const barcode = String(r[0] ?? "").trim();
-    if (!/^\d+$/.test(barcode)) continue;
-    uniq.set(barcode, { barcode, reference: String(r[1] ?? "").trim(), description: String(r[2] ?? "").trim(), stock: num(r[3]), price: num(r[4]) });
+export function parseLocaleNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  let raw = String(value).trim().replace(/[€\s]/g, "");
+  if (!raw) return null;
+  if (raw.includes(",") && raw.includes(".")) raw = raw.replace(/\./g, "").replace(",", ".");
+  else if (raw.includes(",")) raw = raw.replace(",", ".");
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const HEADER_ALIASES = {
+  barcode: ["codbarras", "codigobarras", "ean", "ean13", "barcode"],
+  article: ["artigo", "codigoartigo", "referencia", "ref"],
+  description: ["descricao", "designacao", "nome"],
+  stock: ["stockatual", "stock", "existencia", "existencias"],
+  price: ["ultprecocompraartigo", "ultimoprecocompraartigo", "precocusto", "preco"],
+  warehouse: ["armazem", "loja", "codigoarmazem"],
+};
+
+function findColumn(headers: string[], aliases: string[]) {
+  return headers.findIndex((header) => aliases.includes(header));
+}
+
+export function parsePrimaveraRows(rows: unknown[][]): PrimaveraImport {
+  const headerIndex = rows.slice(0, 20).findIndex((row) => {
+    const h = row.map(normalize);
+    return findColumn(h, HEADER_ALIASES.article) >= 0 &&
+      findColumn(h, HEADER_ALIASES.description) >= 0 &&
+      findColumn(h, HEADER_ALIASES.stock) >= 0 &&
+      findColumn(h, HEADER_ALIASES.warehouse) >= 0;
+  });
+  if (headerIndex < 0) throw new Error("Não encontrei os cabeçalhos Artigo, Descrição, Stock Atual e Armazém.");
+  const headers = rows[headerIndex].map(normalize);
+  const col = {
+    barcode: findColumn(headers, HEADER_ALIASES.barcode),
+    article: findColumn(headers, HEADER_ALIASES.article),
+    description: findColumn(headers, HEADER_ALIASES.description),
+    stock: findColumn(headers, HEADER_ALIASES.stock),
+    price: findColumn(headers, HEADER_ALIASES.price),
+    warehouse: findColumn(headers, HEADER_ALIASES.warehouse),
+  };
+  const storeCodes = new Set(STORES.map((s) => s.code));
+  const articles = new Map<string, PrimaveraArticle>();
+  const barcodes = new Map<string, PrimaveraBarcode>();
+  const stocks = new Map<string, PrimaveraStock>();
+  let rowsRead = 0, rowsSkipped = 0, duplicateStocks = 0;
+  const now = new Date().toISOString();
+
+  for (const row of rows.slice(headerIndex + 1)) {
+    const codigo_artigo = String(row[col.article] ?? "").trim();
+    const descricao = String(row[col.description] ?? "").trim();
+    const armazem = String(row[col.warehouse] ?? "").trim().toUpperCase();
+    if (!codigo_artigo && !descricao && !armazem) continue;
+    rowsRead++;
+    const stock = parseLocaleNumber(row[col.stock]);
+    if (!codigo_artigo || !descricao || !storeCodes.has(armazem) || stock === null) { rowsSkipped++; continue; }
+
+    const preco_custo = col.price >= 0 ? parseLocaleNumber(row[col.price]) : null;
+    articles.set(codigo_artigo, { codigo_artigo, descricao, preco_custo, ativo: true, atualizado_em: now });
+
+    const barcode = col.barcode >= 0 ? String(row[col.barcode] ?? "").trim() : "";
+    if (barcode) barcodes.set(`${barcode}|${codigo_artigo}`, { codigo_barras: barcode, codigo_artigo });
+
+    const stockKey = `${codigo_artigo}|${armazem}`;
+    if (stocks.has(stockKey)) duplicateStocks++;
+    stocks.set(stockKey, { codigo_artigo, armazem, stock_atual: stock, atualizado_em: now });
   }
-  return [...uniq.values()];
+
+  if (!articles.size) throw new Error("O ficheiro não contém linhas válidas. Confirma as colunas e as siglas dos armazéns.");
+  return { articles: [...articles.values()], barcodes: [...barcodes.values()], stocks: [...stocks.values()], rowsRead, rowsSkipped, duplicateStocks };
+}
+
+export function displayedStock(stock: number | null | undefined): number | null {
+  return stock == null ? null : Math.max(0, Number(stock));
 }
