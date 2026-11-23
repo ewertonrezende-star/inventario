@@ -1,16 +1,12 @@
 # Inventário Coopsintra
 
-Aplicação de inventário multi-loja com interface React/TanStack, leitura por código de barras, importação da base Primavera e consolidação por armazém.
-
-## Repositório oficial
+Aplicação própria de inventário multi-loja, mantida diretamente neste repositório.
 
 - Repositório: https://github.com/ewertonrezende-star/inventario
 - Branch de produção: `main`
 - Publicação: https://ewertonrezende-star.github.io/inventario/
 
-Foi criada uma cópia de segurança antes da adaptação: `backup/pre-adaptacao-2026-11-23`.
-
-## Funcionalidades
+## Funcionalidades atuais
 
 - Autenticação por email/palavra-passe do Supabase e perfil ativo em `inv_perfis`.
 - Utilizadores de loja limitados à sua sigla; perfil `central` pode consultar e gerir todas as lojas.
@@ -21,27 +17,19 @@ Foi criada uma cópia de segurança antes da adaptação: `backup/pre-adaptacao-
 - Importação do Excel Primavera com as colunas `cod barras`, `Artigo`, `Descrição`, `Stock Atual`, `Últ. Preço de Compra (Artigo)` e `Armazém`.
 - O stock é associado à combinação artigo + sigla do armazém. Stock negativo é guardado como veio do Primavera, mas apresentado como zero no Consolidado.
 
-## Base de dados Supabase
+## Base de dados
 
-Projeto utilizado: `uacadlvvonvriiqdxdfr`.
+O projeto utiliza o Supabase já configurado para esta aplicação. As tabelas e políticas existentes são mantidas na base de dados; alterações futuras serão feitas de forma controlada, conforme a necessidade do projeto.
+
+Ficheiro de referência do esquema inicial: `supabase/inventario_schema.sql`.
 
 Tabelas utilizadas:
+- `inv_perfis`
 - `inv_artigos`
 - `inv_codigos_barras`
 - `inv_inventarios`
 - `inv_contagens`
-- `inv_perfis`
-- `inv_stock_lojas` (nova tabela para o stock separado por armazém)
-
-### Preparar a tabela de stock
-
-Antes da primeira importação Primavera, executar uma única vez no SQL Editor do Supabase o ficheiro:
-
-`supabase/migrations/202611230001_stock_lojas.sql`
-
-A política de escrita exige um utilizador ativo com perfil `central`. As lojas podem consultar o stock do respetivo armazém de acordo com a função `inv_pode_aceder_loja`.
-
-A importação atualiza os artigos, associações de códigos de barras e stocks por combinação artigo/armazém. Não apaga contagens nem inventários. Stocks negativos e zeros são preservados na base.
+- `inv_stock_lojas`
 
 ## Executar localmente
 
@@ -54,28 +42,15 @@ bun install
 bun run dev
 ```
 
-Para desenvolvimento local, definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no ambiente ou num ficheiro `.env`.
+Definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no ambiente ou num ficheiro `.env`.
 
-## Testes e build
+## Testes e publicação
 
 ```bash
 bun run test
 bun run build
 ```
 
-## Publicação
+O workflow em `.github/workflows/deploy.yml` publica a versão estática no GitHub Pages com o caminho base `/inventario/`.
 
-O projeto usa TanStack Start em modo SPA para permitir alojamento estático no GitHub Pages. O workflow em `.github/workflows/deploy.yml`:
-1. instala as dependências;
-2. executa os testes;
-3. constrói o shell SPA com base `/inventario/`;
-4. publica os ficheiros estáticos no GitHub Pages.
-
-A chave `sb_publishable` é uma chave pública destinada ao browser. A segurança dos dados depende das políticas RLS do Supabase. Nunca colocar uma chave `service_role` em código cliente, em variáveis `VITE_*` ou no GitHub. O workflow usa o URL e a chave pública do projeto configurado; não contém credenciais administrativas.
-
-## Histórico de branches
-
-- `backup/pre-adaptacao-2026-11-23`: estado de `main` antes desta adaptação.
-- `backup/antes-coopersintra-stock`: versão HTML anterior da contagem e esquema SQL inicial.
-- `backup/main-antes-copia-lovable-2026-11-23`: continha apenas um redirecionamento para o endereço publicado no Lovable.
-- `migracao/coopersintra-stock`: versão intermédia da migração; o seu código foi comparado com `main`.
+A chave `sb_publishable` é pública e destinada ao browser. Nunca colocar uma chave `service_role` no código cliente, em variáveis `VITE_*` ou no GitHub. A segurança dos dados depende das políticas RLS do Supabase.
