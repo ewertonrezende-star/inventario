@@ -1,17 +1,9 @@
-// Configuração do Inventário Coopsintra para publicação no GitHub Pages.
-// O Pages publica ficheiros estáticos; o prerender gera o HTML da aplicação no build.
+// @lovable.dev/vite-tanstack-config already includes the TanStack, React, Tailwind and Nitro plugins.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  vite: {
-    base: "/inventario/",
-  },
+  base: process.env.BASE_PATH ?? "/",
   tanstackStart: {
-    prerender: {
-      enabled: true,
-      crawlLinks: true,
-      failOnError: true,
-    },
     server: { entry: "server" },
   },
 });
