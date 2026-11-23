@@ -44,6 +44,10 @@ jobs:
           elif [ -f .output/public/index.html ]; then
             PAGES_DIR=.output/public
             cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
+          elif [ -f dist/client/_shell.html ]; then
+            PAGES_DIR=dist/client
+            cp "$PAGES_DIR/_shell.html" "$PAGES_DIR/index.html"
+            cp "$PAGES_DIR/_shell.html" "$PAGES_DIR/404.html"
           elif [ -f dist/client/index.html ]; then
             PAGES_DIR=dist/client
             cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
