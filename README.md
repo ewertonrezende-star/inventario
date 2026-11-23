@@ -1,68 +1,79 @@
-# Coopsintra Stock — Inventário de Lojas
+# Inventário Coopsintra
 
-Aplicação web de inventário por leitura de código de barras, com registo de contagens por loja e consolidação dos resultados.
+Aplicação de inventário multi-loja com interface React/TanStack, leitura por código de barras, importação da base Primavera e consolidação por armazém.
 
 ## Repositório oficial
 
-O desenvolvimento passa a ser feito diretamente neste repositório GitHub. O código-fonte está na branch `main`.
+- Repositório: https://github.com/ewertonrezende-star/inventario
+- Branch de produção: `main`
+- Publicação: https://ewertonrezende-star.github.io/inventario/
 
-## Tecnologias
+Foi criada uma cópia de segurança antes da adaptação: `backup/pre-adaptacao-2026-11-23`.
 
-- React 19 + TypeScript
-- TanStack Start / TanStack Router
-- Vite
-- Tailwind CSS
-- Supabase (autenticação e base de dados)
-- Vitest
+## Funcionalidades
 
-## Estrutura principal
+- Contagem por loja com leitura de códigos de barras e pesquisa manual por código de artigo/descrição.
+- Modo rápido: cada leitura adiciona uma unidade.
+- Sincronização das contagens através do Supabase.
+- Consolidação por artigo e loja, com opção de apagar a contagem de um artigo.
+- Importação do Excel Primavera com as colunas `cod barras`, `Artigo`, `Descrição`, `Stock Atual`, `Últ. Preço de Compra (Artigo)` e `Armazém`.
+- O stock é associado à combinação artigo + sigla do armazém. Stock negativo é guardado como veio do Primavera, mas apresentado como zero no Consolidado.
 
-- `src/routes/index.tsx`: contagem por loja e leitura de códigos de barras
-- `src/routes/consolidado.tsx`: mapa consolidado das contagens
-- `src/routes/produtos.tsx`: gestão/consulta de produtos
-- `src/integrations/supabase/`: clientes e tipos da base de dados
-- `supabase/` e `drizzle/`: configuração e migrações da base de dados
+## Base de dados Supabase
+
+Projeto utilizado: `uacadlvvonvriiqdxdfr`.
+
+Tabelas utilizadas:
+- `inv_artigos`
+- `inv_codigos_barras`
+- `inv_inventarios`
+- `inv_contagens`
+- `inv_perfis`
+- `inv_stock_lojas` (nova tabela para o stock separado por armazém)
+
+### Preparar a tabela de stock
+
+Antes da primeira importação Primavera, executar uma única vez no SQL Editor do Supabase o ficheiro:
+
+`supabase/migrations/202611230001_stock_lojas.sql`
+
+A política de escrita exige um utilizador ativo com perfil `central`. As lojas podem consultar o stock do respetivo armazém de acordo com a função `inv_pode_aceder_loja`.
+
+A importação atualiza os artigos, associações de códigos de barras e stocks por combinação artigo/armazém. Não apaga contagens nem inventários. Stocks negativos e zeros são preservados na base.
 
 ## Executar localmente
 
-Requisitos: Node.js 20+ e npm.
+Requisitos: Bun (recomendado) ou Node.js 20+.
 
 ```bash
 git clone https://github.com/ewertonrezende-star/inventario.git
 cd inventario
-npm install
+bun install
+bun run dev
 ```
 
-Crie um ficheiro `.env` na raiz, usando `.env.example` como modelo, e preencha as credenciais do projeto Supabase.
+Para desenvolvimento local, definir `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` no ambiente ou num ficheiro `.env`.
 
-Depois execute:
+## Testes e build
 
 ```bash
-npm run dev
+bun run test
+bun run build
 ```
-
-## Verificações
-
-```bash
-npm run lint
-npm test
-npm run build
-```
-
-## Variáveis de ambiente
-
-- `VITE_SUPABASE_URL`: URL pública do projeto Supabase
-- `VITE_SUPABASE_PUBLISHABLE_KEY`: chave pública/publishable usada pelo browser
-- `SUPABASE_URL`: URL do Supabase para o servidor
-- `SUPABASE_PUBLISHABLE_KEY`: chave publishable para operações SSR
-- `SUPABASE_SERVICE_ROLE_KEY`: chave secreta, apenas para operações administrativas no servidor
-
-Nunca publique chaves secretas no GitHub nem coloque `SUPABASE_SERVICE_ROLE_KEY` em variáveis com prefixo `VITE_`. Em produção, configure os segredos no serviço de alojamento.
 
 ## Publicação
 
-Esta aplicação usa TanStack Start com renderização no servidor. O GitHub guarda o código e o histórico; GitHub Pages, por ser alojamento estático, não executa por si só o servidor da aplicação. A publicação deve ser feita num alojamento compatível com TanStack Start/Nitro, configurando as variáveis de ambiente acima.
+O projeto usa TanStack Start em modo SPA para permitir alojamento estático no GitHub Pages. O workflow em `.github/workflows/deploy.yml`:
+1. instala as dependências;
+2. executa os testes;
+3. constrói o shell SPA com base `/inventario/`;
+4. publica os ficheiros estáticos no GitHub Pages.
 
-## Base de dados
+A chave `sb_publishable` é uma chave pública destinada ao browser. A segurança dos dados depende das políticas RLS do Supabase. Nunca colocar uma chave `service_role` em código cliente, em variáveis `VITE_*` ou no GitHub.
 
-As migrações SQL estão em `supabase/` e `drizzle/migrations/`. Não execute migrações em produção sem confirmar primeiro o estado atual da base de dados e manter uma cópia de segurança.
+## Histórico de branches
+
+- `backup/pre-adaptacao-2026-11-23`: estado de `main` antes desta adaptação.
+- `backup/antes-coopersintra-stock`: versão HTML anterior da contagem e esquema SQL inicial.
+- `backup/main-antes-copia-lovable-2026-11-23`: continha apenas um redirecionamento para o endereço publicado no Lovable.
+- `migracao/coopersintra-stock`: versão intermédia da migração; o seu código foi comparado com `main`.
