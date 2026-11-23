@@ -25,7 +25,9 @@ jobs:
           bun-version: latest
       - name: Instalar dependências
         run: bun install --frozen-lockfile
-      - name: Construir aplicação
+      - name: Executar testes
+        run: bun run test
+      - name: Construir aplicação SPA
         run: bun run build
         env:
           BASE_PATH: /inventario/
@@ -35,13 +37,29 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Validar e preparar ficheiros do Pages
         run: |
-          if [ -f dist/client/index.html ]; then PAGES_DIR=dist/client;
-          elif [ -f .output/public/index.html ]; then PAGES_DIR=.output/public;
-          elif [ -f dist/index.html ]; then PAGES_DIR=dist;
-          else echo "Não foi encontrado o index.html gerado pelo build."; find . -maxdepth 4 -name index.html -print; exit 1; fi
-          if grep -q "Inventário – Scan" "$PAGES_DIR/index.html"; then echo "Foi detetado o HTML antigo na publicação."; exit 1; fi
-          if ! grep -qi "<script" "$PAGES_DIR/index.html" || ! grep -q "assets/" "$PAGES_DIR/index.html"; then echo "O HTML publicado não contém os scripts da aplicação."; sed -n "1,100p" "$PAGES_DIR/index.html"; exit 1; fi
-          cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
+          if [ -f .output/public/_shell.html ]; then
+            PAGES_DIR=.output/public
+            cp "$PAGES_DIR/_shell.html" "$PAGES_DIR/index.html"
+            cp "$PAGES_DIR/_shell.html" "$PAGES_DIR/404.html"
+          elif [ -f .output/public/index.html ]; then
+            PAGES_DIR=.output/public
+            cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
+          elif [ -f dist/client/index.html ]; then
+            PAGES_DIR=dist/client
+            cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
+          elif [ -f dist/index.html ]; then
+            PAGES_DIR=dist
+            cp "$PAGES_DIR/index.html" "$PAGES_DIR/404.html"
+          else
+            echo "Não foi encontrado o shell SPA ou index.html. O build não está preparado para GitHub Pages."
+            find .output dist -maxdepth 4 -name '*.html' -print 2>/dev/null || true
+            exit 1
+          fi
+          if ! grep -qi "<script" "$PAGES_DIR/index.html"; then
+            echo "O HTML publicado não contém os scripts da aplicação."
+            sed -n "1,100p" "$PAGES_DIR/index.html"
+            exit 1
+          fi
           touch "$PAGES_DIR/.nojekyll"
           echo "PAGES_DIR=$PAGES_DIR" >> "$GITHUB_ENV"
           echo "A publicar a pasta: $PAGES_DIR"
