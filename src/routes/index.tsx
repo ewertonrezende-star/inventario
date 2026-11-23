@@ -26,7 +26,6 @@ function CountPage() {
   const [quick, setQuick] = useState(false);
   const [entries, setEntries] = useState<CountEntry[]>([]);
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -114,7 +113,21 @@ function CountPage() {
         setSearch(scanned); setResults([]); toast.warning("Código não encontrado. Pesquisa pelo artigo ou descrição.");
         return;
       }
-      setCurrent(article); setCode(scanned); setQty(quick ? "1" : ""); setTimeout(() => qtyRef.current?.focus(), 50);
+      if (quick) {
+        const { data: auth } = await db.auth.getUser();
+        const { error: saveError } = await db.from("inv_contagens").insert({
+          inventario_id: inventory.id, codigo_artigo: article.codigo_artigo,
+          codigo_barras_lido: scanned, quantidade: 1,
+          utilizador_id: auth?.user?.id ?? null, dispositivo_id: deviceId.current || null,
+        });
+        if (saveError) throw saveError;
+        setCode("");
+        await loadCounts(inventory.id);
+        toast.success(`+1 ${article.codigo_artigo}`);
+        setTimeout(() => scanRef.current?.focus(), 50);
+        return;
+      }
+      setCurrent(article); setCode(scanned); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
     } catch (e: any) { toast.error(`Erro ao identificar artigo: ${e.message ?? e}`); }
     finally { setBusy(false); }
   }
@@ -208,7 +221,7 @@ function CountPage() {
       </section>
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">Contagens desta loja</h2><p className="text-sm text-muted-foreground">{storeName ?? "Seleciona uma loja"} · atualização automática</p></div><button disabled={!inventory || loading} onClick={() => inventory && void loadCounts(inventory.id)} className="rounded-lg border px-4 py-2 font-semibold">Atualizar</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">Contagens desta loja</h2><p className="text-sm text-muted-foreground">{storeName ?? "Seleciona uma loja"} · atualização automática</p></div><button disabled={!inventory || busy} onClick={() => inventory && void loadCounts(inventory.id)} className="rounded-lg border px-4 py-2 font-semibold">Atualizar</button></div>
         <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody>
           {!inventory && <tr><td colSpan={4} className="p-5 text-center text-muted-foreground">Seleciona uma loja para começar.</td></tr>}
           {inventory && entries.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-muted-foreground">Ainda não existem contagens.</td></tr>}
