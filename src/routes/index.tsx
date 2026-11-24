@@ -64,10 +64,14 @@ function CountPage() {
     const codes = [...new Set(rows.map((r: any) => r.codigo_artigo).filter(Boolean))];
     const descriptions = new Map<string, string>();
     if (codes.length) {
-      const { data: articles, error: articleError } = await db.from("inv_importacao_primavera")
-        .select("artigo,descricao").in("artigo", codes);
+      const [{ data: articles, error: articleError }, { data: manualArticles, error: manualError }] = await Promise.all([
+        db.from("inv_importacao_primavera").select("artigo,descricao").in("artigo", codes),
+        db.from("inv_produtos_manuais").select("codigo_artigo,descricao").in("codigo_artigo", codes),
+      ]);
       if (articleError) throw articleError;
+      if (manualError) throw manualError;
       for (const a of articles ?? []) if (!descriptions.has(a.artigo)) descriptions.set(a.artigo, a.descricao ?? "");
+      for (const a of manualArticles ?? []) if (!descriptions.has(a.codigo_artigo)) descriptions.set(a.codigo_artigo, a.descricao ?? "");
     }
     const grouped = new Map<string, CountEntry>();
     for (const row of rows) {
