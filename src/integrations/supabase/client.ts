@@ -65,9 +65,12 @@ function createSupabaseClient() {
     global: {
       fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
     },
+    // Este inventário funciona sem contas: cada colaborador identifica-se
+    // pelo nome digitado na sessão, sem guardar sessão Auth no navegador.
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   });
 }
