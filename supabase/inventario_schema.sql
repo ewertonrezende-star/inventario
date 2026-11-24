@@ -36,7 +36,7 @@ create table if not exists public.inv_inventarios (
   loja text not null,
   nome text not null default 'Inventário',
   estado text not null default 'aberto' check (estado in ('aberto','fechado')),
-  criado_por uuid not null default auth.uid() references auth.users(id),
+  criado_por uuid references auth.users(id),
   criado_em timestamptz not null default now(),
   fechado_em timestamptz
 );
@@ -49,7 +49,8 @@ create table if not exists public.inv_contagens (
   codigo_artigo text not null references public.inv_artigos(codigo_artigo),
   codigo_barras_lido text,
   quantidade numeric(12,3) not null check (quantidade >= 0),
-  utilizador_id uuid not null default auth.uid() references auth.users(id),
+  utilizador_id uuid references auth.users(id),
+  contado_por text,
   dispositivo_id text,
   contado_em timestamptz not null default now()
 );
@@ -108,3 +109,34 @@ grant select on public.inv_artigos, public.inv_codigos_barras, public.inv_perfis
   public.inv_inventarios, public.inv_contagens to authenticated;
 grant insert, update on public.inv_inventarios to authenticated;
 grant insert, delete on public.inv_contagens to authenticated;
+
+-- Acesso sem login para a operação de contagem.
+drop policy if exists "artigos leitura anon" on public.inv_artigos;
+create policy "artigos leitura anon" on public.inv_artigos for select to anon using (true);
+drop policy if exists "codigos leitura anon" on public.inv_codigos_barras;
+create policy "codigos leitura anon" on public.inv_codigos_barras for select to anon using (true);
+drop policy if exists "codigos inserir anon" on public.inv_codigos_barras;
+create policy "codigos inserir anon" on public.inv_codigos_barras for insert to anon
+with check (length(trim(codigo_barras)) between 1 and 100 and exists (
+  select 1 from public.inv_artigos a where a.codigo_artigo = inv_codigos_barras.codigo_artigo
+));
+drop policy if exists "inventarios leitura anon" on public.inv_inventarios;
+create policy "inventarios leitura anon" on public.inv_inventarios for select to anon using (true);
+drop policy if exists "inventarios criar anon" on public.inv_inventarios;
+create policy "inventarios criar anon" on public.inv_inventarios for insert to anon
+with check (loja in ('AL','AM','CO','MM','LC','SA') and estado = 'aberto');
+drop policy if exists "contagens leitura anon" on public.inv_contagens;
+create policy "contagens leitura anon" on public.inv_contagens for select to anon using (
+  exists (select 1 from public.inv_inventarios i where i.id = inv_contagens.inventario_id)
+);
+drop policy if exists "contagens inserir anon" on public.inv_contagens;
+create policy "contagens inserir anon" on public.inv_contagens for insert to anon with check (
+  nullif(trim(contado_por), '') is not null and char_length(trim(contado_por)) <= 80
+  and exists (select 1 from public.inv_inventarios i where i.id = inv_contagens.inventario_id and i.estado = 'aberto')
+  and exists (select 1 from public.inv_artigos a where a.codigo_artigo = inv_contagens.codigo_artigo and a.ativo = true)
+);
+
+grant usage on schema public to anon;
+grant select on public.inv_artigos, public.inv_codigos_barras, public.inv_inventarios, public.inv_contagens to anon;
+grant insert on public.inv_codigos_barras, public.inv_inventarios, public.inv_contagens to anon;
+
