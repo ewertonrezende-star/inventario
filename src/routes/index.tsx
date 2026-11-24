@@ -186,16 +186,18 @@ function CountPage() {
     if (term.length < 2) { setResults([]); return; }
     setBusy(true);
     try {
-      const [byCode, byDescription, byBarcode, byManual] = await Promise.all([
+      const [byCode, byDescription, byBarcode, manualByCode, manualByDescription, manualByBarcode] = await Promise.all([
         db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("artigo", `%${term}%`).limit(50),
         db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("descricao", `%${term}%`).limit(50),
         db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("cod_barras", `%${term}%`).limit(50),
-        db.from("inv_produtos_manuais").select("codigo_artigo,descricao").or(`codigo_artigo.ilike.%${term}%,descricao.ilike.%${term}%,codigo_barras.ilike.%${term}%`).limit(50),
+        db.from("inv_produtos_manuais").select("codigo_artigo,descricao").ilike("codigo_artigo", `%${term}%`).limit(50),
+        db.from("inv_produtos_manuais").select("codigo_artigo,descricao").ilike("descricao", `%${term}%`).limit(50),
+        db.from("inv_produtos_manuais").select("codigo_artigo,descricao").ilike("codigo_barras", `%${term}%`).limit(50),
       ]);
       if (byCode.error) throw byCode.error;
       if (byDescription.error) throw byDescription.error;
       if (byBarcode.error) throw byBarcode.error;
-      if (byManual.error) throw byManual.error;
+      for (const result of [manualByCode, manualByDescription, manualByBarcode]) if (result.error) throw result.error;
       const unique = new Map<string, Article>();
       for (const a of [...(byCode.data ?? []), ...(byDescription.data ?? []), ...(byBarcode.data ?? [])]) {
         const candidate = {
@@ -205,7 +207,7 @@ function CountPage() {
         };
         if (!unique.has(a.artigo) || (a.armazem === store && unique.get(a.artigo)?.stock_atual == null)) unique.set(a.artigo, candidate);
       }
-      for (const a of byManual.data ?? []) {
+      for (const a of [...(manualByCode.data ?? []), ...(manualByDescription.data ?? []), ...(manualByBarcode.data ?? [])]) {
         if (!unique.has(a.codigo_artigo)) unique.set(a.codigo_artigo, {
           codigo_artigo: a.codigo_artigo, descricao: a.descricao ?? "", stock_atual: null,
         });
