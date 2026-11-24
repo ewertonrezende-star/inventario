@@ -48,10 +48,10 @@ function CountPage() {
     const codes = [...new Set(rows.map((r: any) => r.codigo_artigo).filter(Boolean))];
     const descriptions = new Map<string, string>();
     if (codes.length) {
-      const { data: articles, error: articleError } = await db.from("inv_artigos")
-        .select("codigo_artigo,descricao").in("codigo_artigo", codes);
+      const { data: articles, error: articleError } = await db.from("inv_importacao_primavera")
+        .select("artigo,descricao").in("artigo", codes);
       if (articleError) throw articleError;
-      for (const a of articles ?? []) descriptions.set(a.codigo_artigo, a.descricao);
+      for (const a of articles ?? []) if (!descriptions.has(a.artigo)) descriptions.set(a.artigo, a.descricao ?? "");
     }
     const grouped = new Map<string, CountEntry>();
     for (const row of rows) {
@@ -102,14 +102,17 @@ function CountPage() {
     if (!scanned || !inventory || busy) return;
     setBusy(true);
     try {
-      let articleCode = scanned;
-      const { data: barcode, error: barcodeError } = await db.from("inv_codigos_barras")
-        .select("codigo_artigo").eq("codigo_barras", scanned).limit(1).maybeSingle();
+      const { data: barcodeRows, error: barcodeError } = await db.from("inv_importacao_primavera")
+        .select("artigo,descricao,cod_barras").eq("cod_barras", scanned).limit(50);
       if (barcodeError) throw barcodeError;
-      if (barcode?.codigo_artigo) articleCode = barcode.codigo_artigo;
-      const { data: article, error } = await db.from("inv_artigos")
-        .select("codigo_artigo,descricao").eq("codigo_artigo", articleCode).eq("ativo", true).maybeSingle();
-      if (error) throw error;
+      let article = barcodeRows?.[0] ? { codigo_artigo: barcodeRows[0].artigo, descricao: barcodeRows[0].descricao ?? "" } : null;
+      if (!article) {
+        const { data: articleRows, error: articleError } = await db.from("inv_importacao_primavera")
+          .select("artigo,descricao").eq("artigo", scanned).limit(20);
+        if (articleError) throw articleError;
+        const found = articleRows?.[0];
+        if (found) article = { codigo_artigo: found.artigo, descricao: found.descricao ?? "" };
+      }
       if (!article) {
         setSearch(scanned); setResults([]); toast.warning("Código não encontrado. Pesquisa pelo artigo ou descrição.");
         return;
@@ -133,19 +136,6 @@ function CountPage() {
   }
 
   async function chooseArticle(article: Article) {
-    if (code && code !== article.codigo_artigo) {
-      const { data: existing, error: lookupError } = await db.from("inv_codigos_barras")
-        .select("codigo_artigo").eq("codigo_barras", code).limit(1).maybeSingle();
-      if (lookupError) throw lookupError;
-      if (existing && existing.codigo_artigo !== article.codigo_artigo) {
-        throw new Error("Este código de barras já está associado a outro artigo. Contacta a Central.");
-      }
-      if (!existing) {
-        const { error } = await db.from("inv_codigos_barras").insert({ codigo_barras: code, codigo_artigo: article.codigo_artigo });
-        if (error) throw error;
-        toast.success("Código de barras associado ao artigo.");
-      }
-    }
     setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
   }
 
@@ -154,14 +144,18 @@ function CountPage() {
     if (!term) return;
     setBusy(true);
     try {
-      const [byCode, byDescription] = await Promise.all([
-        db.from("inv_artigos").select("codigo_artigo,descricao").eq("ativo", true).ilike("codigo_artigo", `%${term}%`).limit(20),
-        db.from("inv_artigos").select("codigo_artigo,descricao").eq("ativo", true).ilike("descricao", `%${term}%`).limit(20),
+      const [byCode, byDescription, byBarcode] = await Promise.all([
+        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("artigo", `%${term}%`).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("descricao", `%${term}%`).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("cod_barras", `%${term}%`).limit(30),
       ]);
       if (byCode.error) throw byCode.error;
       if (byDescription.error) throw byDescription.error;
+      if (byBarcode.error) throw byBarcode.error;
       const unique = new Map<string, Article>();
-      for (const a of [...(byCode.data ?? []), ...(byDescription.data ?? [])]) unique.set(a.codigo_artigo, a);
+      for (const a of [...(byCode.data ?? []), ...(byDescription.data ?? []), ...(byBarcode.data ?? [])]) {
+        if (!unique.has(a.artigo)) unique.set(a.artigo, { codigo_artigo: a.artigo, descricao: a.descricao ?? "" });
+      }
       setResults([...unique.values()]);
     } catch (e: any) { toast.error(`Erro na pesquisa: ${e.message ?? e}`); }
     finally { setBusy(false); }
