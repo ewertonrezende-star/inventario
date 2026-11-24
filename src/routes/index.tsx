@@ -3,8 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { STORES } from "@/lib/inventory";
-import { useAuth } from "@/lib/auth";
-import { LoginForm } from "@/components/LoginForm";
 
 const db = supabase as any;
 
@@ -17,7 +15,6 @@ type Article = { codigo_artigo: string; descricao: string };
 type CountEntry = { id: string; codigo_artigo: string; descricao: string; quantidade: number; contado_em: string };
 
 function CountPage() {
-  const { session, profile, loading: authLoading, profileError } = useAuth();
   const [name, setName] = useState("");
   const [store, setStore] = useState("");
   const [inventory, setInventory] = useState<any>(null);
@@ -40,13 +37,6 @@ function CountPage() {
     if (!id) { id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `device-${Date.now()}`; localStorage.setItem("inv_device_id", id); }
     deviceId.current = id;
   }, []);
-
-  useEffect(() => {
-    if (!profile) return;
-    if (!name && profile.nome) setName(profile.nome);
-    const preferred = profile.perfil === "central" ? (localStorage.getItem("inv_store") ?? "") : profile.loja;
-    setStore(preferred);
-  }, [profile]);
 
   const loadCounts = useCallback(async (inventoryId: string) => {
     const { data, error } = await db.from("inv_contagens")
@@ -72,7 +62,7 @@ function CountPage() {
   }, []);
 
   async function openStore(nextStore: string) {
-    if (nextStore && profile && profile.perfil !== "central" && profile.loja !== nextStore) { toast.error("Este utilizador só pode contar na loja atribuída."); return; }
+    if (!name.trim()) { toast.error("Indica primeiro o teu nome."); return; }
     if (!nextStore) { setStore(""); setInventory(null); setEntries([]); if (timerRef.current) clearInterval(timerRef.current); return; }
     setBusy(true);
     try {
@@ -100,7 +90,7 @@ function CountPage() {
   }
 
   useEffect(() => {
-    if (store && !inventory) void openStore(store);
+    if (store && name.trim() && !inventory) void openStore(store);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // Initial local preference only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,7 +117,7 @@ function CountPage() {
         const { error: saveError } = await db.from("inv_contagens").insert({
           inventario_id: inventory.id, codigo_artigo: article.codigo_artigo,
           codigo_barras_lido: scanned, quantidade: 1,
-          utilizador_id: session?.user?.id ?? null, dispositivo_id: deviceId.current || null,
+          utilizador_id: null, contado_por: name.trim(), dispositivo_id: deviceId.current || null,
         });
         if (saveError) throw saveError;
         setCode("");
@@ -149,12 +139,10 @@ function CountPage() {
       if (existing && existing.codigo_artigo !== article.codigo_artigo) {
         throw new Error("Este código de barras já está associado a outro artigo. Contacta a Central.");
       }
-      if (!existing && profile?.perfil === "central") {
+      if (!existing) {
         const { error } = await db.from("inv_codigos_barras").insert({ codigo_barras: code, codigo_artigo: article.codigo_artigo });
         if (error) throw error;
         toast.success("Código de barras associado ao artigo.");
-      } else if (!existing) {
-        toast.info("A leitura será guardada. A associação permanente deste código deve ser feita pela Central.");
       }
     }
     setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
@@ -188,7 +176,7 @@ function CountPage() {
       const { error } = await db.from("inv_contagens").insert({
         inventario_id: inventory.id, codigo_artigo: current.codigo_artigo,
         codigo_barras_lido: code || null, quantidade,
-        utilizador_id: session?.user?.id ?? null, dispositivo_id: deviceId.current || null,
+        utilizador_id: null, contado_por: name.trim(), dispositivo_id: deviceId.current || null,
       });
       if (error) throw error;
       toast.success(`Contagem guardada: ${current.codigo_artigo}`);
@@ -207,11 +195,7 @@ function CountPage() {
 
   const totalUnits = entries.reduce((sum, row) => sum + row.quantidade, 0);
   const storeName = STORES.find((s) => s.code === store)?.name;
-  const availableStores = profile?.perfil === "central" ? STORES : STORES.filter((s) => s.code === profile?.loja);
-
-  if (authLoading) return <main className="mx-auto max-w-5xl px-4 py-16 text-center text-muted-foreground">A verificar sessão…</main>;
-  if (!session) return <LoginForm />;
-  if (!profile) return <main className="mx-auto max-w-xl px-4 py-16 text-center"><h1 className="text-2xl font-bold">Acesso não configurado</h1><p className="mt-2 text-muted-foreground">{profileError ?? "Este utilizador não tem um perfil ativo em inv_perfis. Contacta a Central."}</p></main>;
+  const availableStores = STORES.filter((s) => s.code !== "CC");
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
@@ -224,12 +208,13 @@ function CountPage() {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h2 className="font-bold">Identificação</h2>
           <label className="mt-4 block text-sm font-medium">Responsável pela contagem</label>
-          <input value={name} readOnly={profile.perfil !== "central" && !!profile.nome} onChange={(e) => { setName(e.target.value); localStorage.setItem("inv_name", e.target.value); }} placeholder="Nome do colaborador" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
+          <input value={name} onChange={(e) => { setName(e.target.value); localStorage.setItem("inv_name", e.target.value); }} placeholder="Nome do colaborador" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
           <label className="mt-4 block text-sm font-medium">Loja / armazém</label>
-          <select value={store} disabled={busy} onChange={(e) => void openStore(e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-3">
+          <select value={store} disabled={busy || !name.trim()} onChange={(e) => void openStore(e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-3">
             <option value="">Selecionar loja</option>{availableStores.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
           </select>
-          {inventory && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Inventário ativo: <strong>{inventory.nome}</strong></p>}
+          {!name.trim() && <p className="mt-2 text-xs text-muted-foreground">Escreve o teu nome para poderes selecionar a loja.</p>}
+          {inventory && <p className="mt-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Responsável: <strong>{name}</strong><br />Inventário ativo: <strong>{inventory.nome}</strong></p>}
         </div>
 
         <div className="space-y-4">

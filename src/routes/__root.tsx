@@ -13,7 +13,6 @@ import { type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { AppNav } from "@/components/AppNav";
-import { AuthProvider } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -122,11 +121,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppNav />
-        <Outlet />
-        <Toaster position="top-center" richColors />
-      </AuthProvider>
+      <AppNav />
+      <Outlet />
+      <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
 }

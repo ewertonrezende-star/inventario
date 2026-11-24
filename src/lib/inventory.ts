@@ -15,6 +15,7 @@ export type CountRow = {
   codigo_barras_lido: string | null;
   quantidade: number;
   utilizador_id: string | null;
+  contado_por?: string | null;
   dispositivo_id: string | null;
   contado_em: string;
 };
@@ -41,7 +42,7 @@ export function mergeCounts(rows: CountRow[], inventories: Map<string, { loja: s
       descricao: "", contado: 0, stock: null, stockOriginal: null, preco: null, utilizadores: [],
     };
     current.contado += Number(row.quantidade || 0);
-    const person = row.utilizador_id ? (names.get(row.utilizador_id) ?? row.utilizador_id.slice(0, 8)) : "Contagem";
+    const person = row.contado_por?.trim() || (row.utilizador_id ? (names.get(row.utilizador_id) ?? row.utilizador_id.slice(0, 8)) : "Contagem");
     if (!current.utilizadores.includes(person)) current.utilizadores.push(person);
     map.set(key, current);
   }

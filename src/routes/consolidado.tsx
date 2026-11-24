@@ -3,8 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { displayedStock, mergeCounts, STORES, type CountRow, type MergedRow } from "@/lib/inventory";
-import { useAuth } from "@/lib/auth";
-import { LoginForm } from "@/components/LoginForm";
 
 const db = supabase as any;
 
@@ -14,7 +12,6 @@ export const Route = createFileRoute("/consolidado")({
 });
 
 function ConsolidatedPage() {
-  const { session, profile, loading: authLoading, profileError } = useAuth();
   const [rows, setRows] = useState<MergedRow[]>([]);
   const [store, setStore] = useState("ALL");
   const [loading, setLoading] = useState(true);
@@ -34,7 +31,7 @@ function ConsolidatedPage() {
       const ids = active.map((inv: any) => inv.id);
       for (let i = 0; i < ids.length; i += 100) {
         const { data, error } = await db.from("inv_contagens")
-          .select("inventario_id,codigo_artigo,codigo_barras_lido,quantidade,utilizador_id,dispositivo_id,contado_em")
+          .select("inventario_id,codigo_artigo,codigo_barras_lido,quantidade,utilizador_id,contado_por,dispositivo_id,contado_em")
           .in("inventario_id", ids.slice(i, i + 100));
         if (error) throw error;
         counts = counts.concat((data ?? []) as CountRow[]);
@@ -72,11 +69,7 @@ function ConsolidatedPage() {
     } finally { setLoading(false); setRefreshing(false); }
   }
 
-  useEffect(() => {
-    if (!profile) return;
-    if (profile.perfil !== "central") setStore(profile.loja);
-    void load();
-  }, [profile]);
+  useEffect(() => { void load(); }, []);
 
   const filtered = useMemo(() => store === "ALL" ? rows : rows.filter((r) => r.loja === store), [rows, store]);
   const totalCountedValue = filtered.reduce((sum, row) => sum + row.contado * (row.preco ?? 0), 0);
@@ -110,10 +103,7 @@ function ConsolidatedPage() {
     URL.revokeObjectURL(link.href);
   }
 
-  if (authLoading) return <main className="px-4 py-16 text-center text-muted-foreground">A verificar sessão…</main>;
-  if (!session) return <LoginForm />;
-  if (!profile) return <main className="mx-auto max-w-xl px-4 py-16 text-center"><h1 className="text-2xl font-bold">Acesso não configurado</h1><p className="mt-2 text-muted-foreground">{profileError ?? "Este utilizador não tem um perfil ativo em inv_perfis."}</p></main>;
-  const availableStores = profile.perfil === "central" ? STORES : STORES.filter((s) => s.code === profile.loja);
+  const availableStores = STORES.filter((s) => s.code !== "CC");
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-8">
@@ -126,7 +116,7 @@ function ConsolidatedPage() {
         <div className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Valor contado</p><p className="mt-1 font-mono text-2xl font-bold">{totalCountedValue.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</p></div>
         <div className="rounded-xl border bg-card p-4"><p className="text-sm text-muted-foreground">Diferença total (un.)</p><p className="mt-1 font-mono text-2xl font-bold">{totalDifference}</p></div>
       </section>
-      <div className="flex flex-wrap gap-2">{[...(profile.perfil === "central" ? [{ code: "ALL", name: "Todas" }] : []), ...availableStores].map((s) => <button key={s.code} onClick={() => setStore(s.code)} className={`rounded-full border px-4 py-2 text-sm font-semibold ${store === s.code ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>{s.code === "ALL" ? "Todas as lojas" : `${s.code} · ${s.name}`}</button>)}</div>
+      <div className="flex flex-wrap gap-2">{[{ code: "ALL", name: "Todas" }, ...availableStores].map((s) => <button key={s.code} onClick={() => setStore(s.code)} className={`rounded-full border px-4 py-2 text-sm font-semibold ${store === s.code ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>{s.code === "ALL" ? "Todas as lojas" : `${s.code} · ${s.name}`}</button>)}</div>
       <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Loja</th><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th><th className="p-3 text-right">Stock loja</th><th className="p-3 text-right">Diferença</th><th className="p-3 text-right">Valor contado</th><th className="p-3">Contado por</th><th className="p-3 text-right">Ação</th></tr></thead><tbody>
           {loading && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">A carregar dados…</td></tr>}
