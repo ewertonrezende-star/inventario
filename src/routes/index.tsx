@@ -243,7 +243,7 @@ function CountPage() {
         codigo_barras: code.trim(),
         descricao: description,
         criado_por: name.trim(),
-      }, { onConflict: "codigo_barras" });
+      }, { onConflict: "codigo_barras", ignoreDuplicates: true });
       if (productError) throw productError;
       const { data: savedProduct, error: lookupError } = await db.from("inv_produtos_manuais")
         .select("codigo_artigo,descricao").eq("codigo_barras", code.trim()).single();
