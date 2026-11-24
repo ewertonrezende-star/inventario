@@ -78,15 +78,6 @@ function ConsolidatedPage() {
   const totalCountedValue = filtered.reduce((sum, row) => sum + row.contado * (row.preco ?? 0), 0);
   const totalDifference = filtered.reduce((sum, row) => sum + (row.stock == null ? 0 : row.contado - row.stock), 0);
 
-  async function deleteCount(row: MergedRow) {
-    if (!window.confirm(`Apagar todas as contagens do artigo ${row.codigo_artigo} em ${row.loja}?`)) return;
-    const { error } = await db.from("inv_contagens").delete()
-      .eq("inventario_id", row.inventario_id).eq("codigo_artigo", row.codigo_artigo);
-    if (error) { toast.error(`Não foi possível apagar: ${error.message}`); return; }
-    toast.success("Contagem apagada.");
-    await load();
-  }
-
   function exportCsv() {
     const lines = ["loja;artigo;descricao;contado;stock_loja;stock_primavera;diferenca;preco_custo;valor_contado;contado_por"];
     for (const row of filtered) {
@@ -121,12 +112,12 @@ function ConsolidatedPage() {
       </section>
       <div className="flex flex-wrap gap-2">{[{ code: "ALL", name: "Todas" }, ...availableStores].map((s) => <button key={s.code} onClick={() => setStore(s.code)} className={`rounded-full border px-4 py-2 text-sm font-semibold ${store === s.code ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}>{s.code === "ALL" ? "Todas as lojas" : `${s.code} · ${s.name}`}</button>)}</div>
       <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Loja</th><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th><th className="p-3 text-right">Stock loja</th><th className="p-3 text-right">Diferença</th><th className="p-3 text-right">Valor contado</th><th className="p-3">Contado por</th><th className="p-3 text-right">Ação</th></tr></thead><tbody>
-          {loading && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">A carregar dados…</td></tr>}
-          {!loading && filtered.length === 0 && <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">Ainda não existem contagens nos inventários abertos.</td></tr>}
+        <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Loja</th><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th><th className="p-3 text-right">Stock loja</th><th className="p-3 text-right">Diferença</th><th className="p-3 text-right">Valor contado</th><th className="p-3">Contado por</th></tr></thead><tbody>
+          {loading && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">A carregar dados…</td></tr>}
+          {!loading && filtered.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-muted-foreground">Ainda não existem contagens nos inventários abertos.</td></tr>}
           {filtered.map((row) => {
             const difference = row.stock == null ? null : row.contado - row.stock;
-            return <tr key={`${row.loja}|${row.codigo_artigo}`} className="border-t hover:bg-muted/40"><td className="p-3 font-mono font-bold">{row.loja}</td><td className="p-3 font-mono">{row.codigo_artigo}</td><td className="p-3">{row.descricao}</td><td className="p-3 text-right font-mono font-bold">{row.contado}</td><td className="p-3 text-right font-mono">{row.stock == null ? "—" : row.stock}</td><td className={`p-3 text-right font-mono font-bold ${difference == null ? "" : difference === 0 ? "text-success" : "text-destructive"}`}>{difference == null ? "—" : difference > 0 ? `+${difference}` : difference}</td><td className="p-3 text-right font-mono">{row.preco == null ? "—" : (row.contado * row.preco).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td><td className="p-3 text-muted-foreground">{row.utilizadores.join(", ") || "—"}</td><td className="p-3 text-right"><button onClick={() => void deleteCount(row)} className="text-destructive hover:underline">Apagar</button></td></tr>;
+            return <tr key={`${row.loja}|${row.codigo_artigo}`} className="border-t hover:bg-muted/40"><td className="p-3 font-mono font-bold">{row.loja}</td><td className="p-3 font-mono">{row.codigo_artigo}</td><td className="p-3">{row.descricao}</td><td className="p-3 text-right font-mono font-bold">{row.contado}</td><td className="p-3 text-right font-mono">{row.stock == null ? "—" : row.stock}</td><td className={`p-3 text-right font-mono font-bold ${difference == null ? "" : difference === 0 ? "text-success" : "text-destructive"}`}>{difference == null ? "—" : difference > 0 ? `+${difference}` : difference}</td><td className="p-3 text-right font-mono">{row.preco == null ? "—" : (row.contado * row.preco).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td><td className="p-3 text-muted-foreground">{row.utilizadores.join(", ") || "—"}</td></tr>;
           })}
         </tbody></table></div>
       </section>
