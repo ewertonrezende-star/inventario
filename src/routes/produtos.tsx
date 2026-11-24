@@ -1,108 +1,93 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import * as XLSX from "xlsx";
-import { parsePrimaveraRows, type PrimaveraImport } from "@/lib/inventory";
-import { useAuth } from "@/lib/auth";
-import { LoginForm } from "@/components/LoginForm";
 
 const db = supabase as any;
 
 export const Route = createFileRoute("/produtos")({
-  head: () => ({ meta: [{ title: "Base Primavera — Inventário Coopsintra" }, { name: "description", content: "Importar artigos, códigos de barras e stock por armazém." }] }),
+  head: () => ({ meta: [{ title: "Base Primavera — Inventário Coopsintra" }, { name: "description", content: "Consulta dos artigos importados do Primavera." }] }),
   component: ProductsPage,
 });
 
-async function upsertBatches(table: string, rows: any[], onConflict: string) {
-  for (let i = 0; i < rows.length; i += 400) {
-    const { error } = await db.from(table).upsert(rows.slice(i, i + 400), { onConflict });
-    if (error) throw error;
-  }
-}
+type ProductRow = {
+  cod_barras: string | null;
+  artigo: string;
+  descricao: string | null;
+  stock_atual: number | null;
+  ultimo_preco_compra: number | null;
+  armazem: string;
+};
 
 function ProductsPage() {
-  const { session, profile, loading: authLoading, profileError } = useAuth();
-  const [articleCount, setArticleCount] = useState<number | null>(null);
-  const [stockCount, setStockCount] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<PrimaveraImport | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [term, setTerm] = useState("");
+  const [rows, setRows] = useState<ProductRow[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  async function refresh() {
-    const [articles, stocks] = await Promise.all([
-      db.from("inv_artigos").select("codigo_artigo", { count: "exact", head: true }),
-      db.from("inv_stock_lojas").select("codigo_artigo", { count: "exact", head: true }),
-    ]);
-    if (articles.error) toast.error(articles.error.message);
-    else setArticleCount(articles.count ?? 0);
-    if (stocks.error) toast.error(stocks.error.message);
-    else setStockCount(stocks.count ?? 0);
-  }
-  useEffect(() => { if (profile?.perfil === "central") void refresh(); }, [profile]);
-
-  async function readFile(file: File) {
-    setBusy(true); setPreview(null);
+  async function load(search = "") {
+    setLoading(true);
     try {
-      const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: false, raw: true });
-      const sheet = workbook.Sheets[workbook.SheetNames[0] ?? ""];
-      if (!sheet) throw new Error("O ficheiro não tem uma primeira folha válida.");
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "" });
-      const parsed = parsePrimaveraRows(rows);
-      setPreview(parsed);
-      toast.success(`Ficheiro validado: ${parsed.articles.length} artigos, ${parsed.stocks.length} stocks por armazém.`);
+      let query = db.from("inv_importacao_primavera")
+        .select("cod_barras,artigo,descricao,stock_atual,ultimo_preco_compra,armazem")
+        .order("artigo").order("armazem").limit(250);
+      if (search.trim()) {
+        const value = search.trim();
+        const [byBarcode, byArticle, byDescription] = await Promise.all([
+          db.from("inv_importacao_primavera").select("cod_barras,artigo,descricao,stock_atual,ultimo_preco_compra,armazem").ilike("cod_barras", `%${value}%`).limit(100),
+          db.from("inv_importacao_primavera").select("cod_barras,artigo,descricao,stock_atual,ultimo_preco_compra,armazem").ilike("artigo", `%${value}%`).limit(100),
+          db.from("inv_importacao_primavera").select("cod_barras,artigo,descricao,stock_atual,ultimo_preco_compra,armazem").ilike("descricao", `%${value}%`).limit(100),
+        ]);
+        if (byBarcode.error) throw byBarcode.error;
+        if (byArticle.error) throw byArticle.error;
+        if (byDescription.error) throw byDescription.error;
+        const unique = new Map<string, ProductRow>();
+        for (const item of [...(byBarcode.data ?? []), ...(byArticle.data ?? []), ...(byDescription.data ?? [])]) {
+          const key = `${item.artigo}|${item.armazem}`;
+          if (!unique.has(key)) unique.set(key, item);
+        }
+        setRows([...unique.values()]);
+      } else {
+        const [{ data, error }, countResult] = await Promise.all([
+          query,
+          db.from("inv_importacao_primavera").select("id", { count: "exact", head: true }),
+        ]);
+        if (error) throw error;
+        if (countResult.error) throw countResult.error;
+        setRows((data ?? []) as ProductRow[]);
+        setTotal(countResult.count ?? 0);
+      }
     } catch (e: any) {
-      toast.error(e.message ?? "Não foi possível ler o ficheiro.");
-    } finally { setBusy(false); }
+      toast.error(`Não foi possível consultar a base Primavera: ${e.message ?? e}`);
+    } finally { setLoading(false); }
   }
 
-  async function importBase() {
-    if (!preview) return;
-    setBusy(true);
-    try {
-      await upsertBatches("inv_artigos", preview.articles, "codigo_artigo");
-      if (preview.barcodes.length) await upsertBatches("inv_codigos_barras", preview.barcodes, "codigo_barras,codigo_artigo");
-      await upsertBatches("inv_stock_lojas", preview.stocks, "codigo_artigo,armazem");
-      toast.success("Base Primavera importada. As contagens e os inventários existentes foram preservados.");
-      setPreview(null);
-      if (fileRef.current) fileRef.current.value = "";
-      await refresh();
-    } catch (e: any) {
-      toast.error(`A importação foi interrompida: ${e.message ?? e}. Verifica as permissões e volta a importar o mesmo ficheiro; os registos são atualizados por chave, não acumulados.`);
-    } finally { setBusy(false); }
-  }
-
-  if (authLoading) return <main className="px-4 py-16 text-center text-muted-foreground">A verificar sessão…</main>;
-  if (!session) return <LoginForm />;
-  if (!profile || profile.perfil !== "central") return <main className="mx-auto max-w-xl px-4 py-16 text-center"><h1 className="text-2xl font-bold">Acesso reservado à Central</h1><p className="mt-2 text-muted-foreground">{profileError ?? "Só um utilizador ativo com perfil central pode importar a base Primavera."}</p></main>;
+  useEffect(() => { void load(); }, []);
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-      <section><p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Dados de referência</p><h1 className="text-3xl font-extrabold tracking-tight">Importar base Primavera</h1><p className="mt-1 max-w-3xl text-muted-foreground">Carrega o Excel exportado do Primavera. A aplicação separa os artigos, códigos de barras e o stock de cada armazém, usando a sigla da coluna Armazém.</p></section>
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border bg-card p-5 shadow-sm"><p className="text-sm text-muted-foreground">Artigos na base</p><p className="mt-1 font-mono text-3xl font-bold">{articleCount ?? "—"}</p></div>
-        <div className="rounded-xl border bg-card p-5 shadow-sm"><p className="text-sm text-muted-foreground">Registos de stock por armazém</p><p className="mt-1 font-mono text-3xl font-bold">{stockCount ?? "—"}</p></div>
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+      <section>
+        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Base de referência</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Produtos Primavera</h1>
+        <p className="mt-1 text-muted-foreground">Consulta a mesma tabela usada pela contagem: código de barras, artigo, descrição e stock por armazém. Esta página não exige autenticação nem altera os dados.</p>
       </section>
       <section className="rounded-xl border bg-card p-5 shadow-sm">
-        <h2 className="font-bold">Ficheiro esperado</h2>
-        <p className="mt-2 text-sm text-muted-foreground">A primeira folha deve conter os cabeçalhos do Primavera, incluindo:</p>
-        <div className="mt-3 flex flex-wrap gap-2">{["cod barras","Artigo","Descrição","Stock Atual","Últ. Preço de Compra (Artigo)","Armazém"].map((h) => <span key={h} className="rounded-md bg-muted px-3 py-1.5 font-mono text-xs">{h}</span>)}</div>
-        <p className="mt-3 text-sm text-muted-foreground">Armazéns reconhecidos: AL, AM, CO, MM, LC, SA e CC. O stock negativo é preservado na base original, mas será apresentado como zero no Consolidado. Linhas sem código de barras são aceites.</p>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" disabled={busy} className="mt-5 block w-full rounded-lg border bg-background p-3 text-sm" onChange={(e) => { const file = e.target.files?.[0]; if (file) void readFile(file); }} />
-        {busy && <p className="mt-3 text-sm text-muted-foreground">A processar…</p>}
-      </section>
-      {preview && <section className="rounded-xl border-2 border-primary/30 bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Pré-visualização da importação</h2><p className="text-sm text-muted-foreground">Confirma os totais antes de atualizar a base.</p></div><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Validado</span></div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
-          <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Artigos</p><strong className="font-mono text-2xl">{preview.articles.length}</strong></div>
-          <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Associações de barras</p><strong className="font-mono text-2xl">{preview.barcodes.length}</strong></div>
-          <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Stocks por loja</p><strong className="font-mono text-2xl">{preview.stocks.length}</strong></div>
-          <div className="rounded-lg bg-muted p-3"><p className="text-xs text-muted-foreground">Linhas ignoradas</p><strong className="font-mono text-2xl">{preview.rowsSkipped}</strong></div>
+        <div className="flex flex-wrap gap-2">
+          <input value={term} onChange={(e) => setTerm(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void load(term); }} placeholder="Pesquisar por código de barras, artigo ou descrição" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" />
+          <button onClick={() => void load(term)} disabled={loading} className="rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Pesquisar</button>
+          <button onClick={() => { setTerm(""); void load(""); }} disabled={loading} className="rounded-lg border px-4 py-3 font-semibold">Limpar</button>
         </div>
-        {preview.duplicateStocks > 0 && <p className="mt-3 text-sm text-amber-700">{preview.duplicateStocks} combinações artigo/armazém repetidas. Foi mantida a última linha de cada combinação.</p>}
-        <div className="mt-5 flex flex-wrap gap-2"><button disabled={busy} onClick={() => void importBase()} className="rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground disabled:opacity-50">Importar e atualizar base</button><button disabled={busy} onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = ""; }} className="rounded-lg border px-5 py-3 font-semibold">Cancelar</button></div>
-        <p className="mt-3 text-xs text-muted-foreground">A operação não apaga contagens nem inventários. Os stocks são substituídos por artigo e armazém; não são somados aos valores anteriores.</p>
-      </section>}
+        <p className="mt-3 text-sm text-muted-foreground">{loading ? "A carregar…" : term.trim() ? `${rows.length} resultados encontrados` : `${total ?? rows.length} linhas na base · a mostrar até 250`}</p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="bg-muted text-left"><tr><th className="p-3">Código de barras</th><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Stock</th><th className="p-3 text-right">Último preço</th><th className="p-3">Armazém</th></tr></thead>
+            <tbody>
+              {rows.map((item, i) => <tr key={`${item.artigo}|${item.armazem}|${i}`} className="border-t"><td className="p-3 font-mono">{item.cod_barras ?? "—"}</td><td className="p-3 font-mono">{item.artigo}</td><td className="p-3">{item.descricao ?? "—"}</td><td className="p-3 text-right font-mono">{item.stock_atual ?? "—"}</td><td className="p-3 text-right font-mono">{item.ultimo_preco_compra == null ? "—" : Number(item.ultimo_preco_compra).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td><td className="p-3 font-mono">{item.armazem}</td></tr>)}
+              {!loading && rows.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Não foram encontrados produtos.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }
