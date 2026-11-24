@@ -104,22 +104,23 @@ function CountPage() {
     try {
       const { data: barcodeRows, error: barcodeError } = await db.from("inv_importacao_primavera")
         .select("artigo,descricao,cod_barras,stock_atual,armazem")
-        .eq("cod_barras", scanned).eq("armazem", store).limit(5);
+        .eq("cod_barras", scanned).limit(50);
       if (barcodeError) throw barcodeError;
-      let article = barcodeRows?.[0] ? {
-        codigo_artigo: barcodeRows[0].artigo,
-        descricao: barcodeRows[0].descricao ?? "",
-        stock_atual: barcodeRows[0].stock_atual == null ? null : Number(barcodeRows[0].stock_atual),
+      const barcodeRow = (barcodeRows ?? []).find((row: any) => row.armazem === store) ?? barcodeRows?.[0];
+      let article = barcodeRow ? {
+        codigo_artigo: barcodeRow.artigo,
+        descricao: barcodeRow.descricao ?? "",
+        stock_atual: barcodeRow.armazem === store && barcodeRow.stock_atual != null ? Number(barcodeRow.stock_atual) : null,
       } : null;
       if (!article) {
         const { data: articleRows, error: articleError } = await db.from("inv_importacao_primavera")
-          .select("artigo,descricao,stock_atual").eq("artigo", scanned).eq("armazem", store).limit(5);
+          .select("artigo,descricao,stock_atual,armazem").eq("artigo", scanned).limit(50);
         if (articleError) throw articleError;
-        const found = articleRows?.[0];
+        const found = (articleRows ?? []).find((row: any) => row.armazem === store) ?? articleRows?.[0];
         if (found) article = {
           codigo_artigo: found.artigo,
           descricao: found.descricao ?? "",
-          stock_atual: found.stock_atual == null ? null : Number(found.stock_atual),
+          stock_atual: found.armazem === store && found.stock_atual != null ? Number(found.stock_atual) : null,
         };
       }
       if (!article) {
@@ -154,20 +155,21 @@ function CountPage() {
     setBusy(true);
     try {
       const [byCode, byDescription, byBarcode] = await Promise.all([
-        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("artigo", `%${term}%`).eq("armazem", store).limit(30),
-        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("descricao", `%${term}%`).eq("armazem", store).limit(30),
-        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("cod_barras", `%${term}%`).eq("armazem", store).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("artigo", `%${term}%`).limit(50),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("descricao", `%${term}%`).limit(50),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("cod_barras", `%${term}%`).limit(50),
       ]);
       if (byCode.error) throw byCode.error;
       if (byDescription.error) throw byDescription.error;
       if (byBarcode.error) throw byBarcode.error;
       const unique = new Map<string, Article>();
       for (const a of [...(byCode.data ?? []), ...(byDescription.data ?? []), ...(byBarcode.data ?? [])]) {
-        if (!unique.has(a.artigo)) unique.set(a.artigo, {
+        const candidate = {
           codigo_artigo: a.artigo,
           descricao: a.descricao ?? "",
-          stock_atual: a.stock_atual == null ? null : Number(a.stock_atual),
-        });
+          stock_atual: a.armazem === store && a.stock_atual != null ? Number(a.stock_atual) : null,
+        };
+        if (!unique.has(a.artigo) || (a.armazem === store && unique.get(a.artigo)?.stock_atual == null)) unique.set(a.artigo, candidate);
       }
       setResults([...unique.values()]);
     } catch (e: any) { toast.error(`Erro na pesquisa: ${e.message ?? e}`); }
