@@ -46,7 +46,7 @@ create policy "contagens inserir anon"
       where i.id = inventario_id and i.estado = 'aberto'
     )
     and (
-      exists (select 1 from public.inv_importacao_primavera p where p.artigo = codigo_artigo)
-      or exists (select 1 from public.inv_produtos_manuais m where m.codigo_artigo = codigo_artigo)
+      exists (select 1 from public.inv_importacao_primavera p where p.artigo = inv_contagens.codigo_artigo)
+      or exists (select 1 from public.inv_produtos_manuais m where m.codigo_artigo = inv_contagens.codigo_artigo)
     )
   );
