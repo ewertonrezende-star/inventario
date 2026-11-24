@@ -51,5 +51,16 @@ grant usage on schema public to anon;
 grant select on public.inv_importacao_primavera, public.inv_inventarios, public.inv_contagens to anon;
 grant insert on public.inv_inventarios, public.inv_contagens to anon;
 
--- Não é concedido DELETE a anon: a contagem e o histórico não ficam expostos
--- à eliminação por qualquer visitante sem autenticação.
+-- Permite excluir contagens apenas de inventários ainda abertos.
+-- Como o app funciona sem login, qualquer pessoa com acesso ao app pode executar
+-- esta ação; a confirmação é apresentada no próprio Consolidado.
+drop policy if exists "contagens excluir anon inventario aberto" on public.inv_contagens;
+create policy "contagens excluir anon inventario aberto"
+  on public.inv_contagens for delete to anon using (
+    exists (
+      select 1 from public.inv_inventarios i
+      where i.id = inventario_id and i.estado = 'aberto'
+    )
+  );
+
+grant delete on public.inv_contagens to anon;
