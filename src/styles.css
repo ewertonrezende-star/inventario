@@ -157,3 +157,39 @@
     color: var(--color-foreground);
   }
 }
+
+/* Interface PDA — controlos tácteis grandes e leitura rápida em armazém */
+:root {
+  --primary: oklch(0.36 0.105 151);
+  --primary-foreground: oklch(0.99 0.005 145);
+  --accent: oklch(0.88 0.13 145);
+  --accent-foreground: oklch(0.24 0.06 150);
+  --ring: oklch(0.58 0.14 150);
+  --background: oklch(0.955 0.012 145);
+}
+body { -webkit-tap-highlight-color: transparent; }
+.pda-page { padding-bottom: 6.5rem; }
+.pda-topbar { background: linear-gradient(115deg, oklch(0.25 0.085 151), oklch(0.34 0.12 151)); }
+.pda-panel { border-color: oklch(0.88 0.025 150); border-radius: 1.15rem; box-shadow: 0 5px 18px rgba(20,65,40,.055); }
+.pda-heading h1 { color: oklch(0.24 0.055 150); }
+.pda-counter { border-color: oklch(0.84 0.055 150); border-radius: 1rem; }
+.pda-scan-input { min-height: 4.2rem; border-radius: .9rem; font-size: 1.15rem; }
+.pda-input { min-height: 3.15rem; border-radius: .8rem; }
+.pda-quantity { min-height: 4rem; width: min(100%, 10rem); border: 2px solid oklch(0.62 0.13 150); border-radius: .85rem; text-align: center; font-size: 1.65rem; }
+.pda-primary { min-height: 3.5rem; border-radius: .85rem; background: linear-gradient(135deg, oklch(0.42 0.14 150), oklch(0.34 0.12 150)); box-shadow: 0 3px 0 oklch(0.25 0.09 150); }
+.pda-primary:active { transform: translateY(1px); box-shadow: 0 1px 0 oklch(0.25 0.09 150); }
+.pda-active { border-radius: 1rem; }
+.pda-bottom-nav a { text-decoration: none; }
+@media (max-width: 639px) {
+  .pda-page { gap: 1rem; padding-top: 1rem; }
+  .pda-heading { align-items: stretch; }
+  .pda-heading h1 { font-size: 1.55rem; line-height: 1.9rem; }
+  .pda-heading > div:last-child { width: 100%; justify-content: center; }
+  .pda-panel { padding: 1rem; }
+  .pda-scan-input { min-height: 4.5rem; font-size: 1rem; }
+  .pda-primary { min-height: 3.8rem; font-size: 1rem; }
+  .pda-page table { min-width: 32rem; }
+}
+@media (min-width: 640px) {
+  .pda-page { padding-bottom: 2rem; }
+}
