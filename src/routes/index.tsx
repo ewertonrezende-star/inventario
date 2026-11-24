@@ -32,7 +32,8 @@ function CountPage() {
   const deviceId = useRef("");
 
   useEffect(() => {
-    setName(localStorage.getItem("inv_name") ?? "");
+    // O nome é pedido a cada nova sessão para não atribuir contagens
+    // ao colaborador anterior quando o dispositivo é partilhado.
     let id = localStorage.getItem("inv_device_id");
     if (!id) { id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `device-${Date.now()}`; localStorage.setItem("inv_device_id", id); }
     deviceId.current = id;
@@ -208,7 +209,7 @@ function CountPage() {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h2 className="font-bold">Identificação</h2>
           <label className="mt-4 block text-sm font-medium">Responsável pela contagem</label>
-          <input value={name} onChange={(e) => { setName(e.target.value); localStorage.setItem("inv_name", e.target.value); }} placeholder="Nome do colaborador" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" placeholder="Ex.: João, Nuno ou António" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
           <label className="mt-4 block text-sm font-medium">Loja / armazém</label>
           <select value={store} disabled={busy || !name.trim()} onChange={(e) => void openStore(e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-3">
             <option value="">Selecionar loja</option>{availableStores.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
