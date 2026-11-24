@@ -163,9 +163,9 @@ function CountPage() {
     setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
   }
 
-  async function searchArticles() {
-    const term = search.trim();
-    if (!term) return;
+  async function searchArticles(termValue = search) {
+    const term = termValue.trim();
+    if (term.length < 2) { setResults([]); return; }
     setBusy(true);
     try {
       const [byCode, byDescription, byBarcode] = await Promise.all([
@@ -189,6 +189,17 @@ function CountPage() {
     } catch (e: any) { toast.error(`Erro na pesquisa: ${e.message ?? e}`); }
     finally { setBusy(false); }
   }
+
+  // Sugestões automáticas na pesquisa manual enquanto o utilizador escreve.
+  // O pequeno debounce evita consultas à base de dados a cada tecla.
+  useEffect(() => {
+    const term = search.trim();
+    if (term.length < 2) { setResults([]); return; }
+    const timeout = setTimeout(() => { void searchArticles(term); }, 300);
+    return () => clearTimeout(timeout);
+    // searchArticles usa o termo e a loja atuais.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, store]);
 
   async function saveCount(e: React.FormEvent) {
     e.preventDefault();
@@ -248,8 +259,9 @@ function CountPage() {
           </div>
 
           <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <h2 className="font-bold">Pesquisa manual</h2><div className="mt-3 flex gap-2"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchArticles(); }} placeholder="Código do artigo ou descrição" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" /><button disabled={busy} onClick={() => void searchArticles()} className="rounded-lg border px-4 py-2 font-semibold">Pesquisar</button></div>
-            {results.length > 0 && <div className="mt-3 grid gap-2">{results.map((a) => <button key={a.codigo_artigo} onClick={() => void chooseArticle(a).catch((e) => toast.error(e.message))} className="rounded-lg border p-3 text-left hover:bg-muted"><span className="font-mono text-sm">{a.codigo_artigo}</span><span className="ml-3 font-semibold">{a.descricao}</span></button>)}</div>}
+            <h2 className="font-bold">Pesquisa manual</h2><div className="mt-3 flex gap-2"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchArticles(); }} placeholder="Começa a escrever artigo, descrição ou código de barras…" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" /></div>
+            {search.trim().length >= 2 && results.length > 0 && <div className="mt-3 grid gap-2">{results.map((a) => <button key={a.codigo_artigo} onClick={() => void chooseArticle(a).catch((e) => toast.error(e.message))} className="rounded-lg border p-3 text-left hover:bg-muted"><span className="block font-mono text-sm">{a.codigo_artigo}</span><span className="font-semibold">{a.descricao}</span></button>)}</div>}
+            {search.trim().length >= 2 && results.length === 0 && <p className="mt-3 text-sm text-muted-foreground">A procurar artigos correspondentes… Se não aparecer, confirma o código ou tenta outra parte da descrição.</p>}
           </div>
         </div>
       </section>
