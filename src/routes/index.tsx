@@ -23,7 +23,7 @@ function CountPage() {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<Article[]>([]);
   const [current, setCurrent] = useState<Article | null>(null);
-  const [qty, setQty] = useState("1");
+  const [qty, setQty] = useState("");
   const [quick, setQuick] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [manualDescription, setManualDescription] = useState("");
@@ -172,13 +172,13 @@ function CountPage() {
         setTimeout(() => scanRef.current?.focus(), 50);
         return;
       }
-      setCurrent(article); setCode(scanned); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
+      setCurrent(article); setCode(scanned); setQty(""); setTimeout(() => qtyRef.current?.focus(), 50);
     } catch (e: any) { toast.error(`Erro ao identificar artigo: ${e.message ?? e}`); }
     finally { setBusy(false); }
   }
 
   async function chooseArticle(article: Article) {
-    setCurrent(article); setQty("1"); setTimeout(() => qtyRef.current?.focus(), 50);
+    setCurrent(article); setQty(""); setTimeout(() => qtyRef.current?.focus(), 50);
   }
 
   async function searchArticles(termValue = search) {
@@ -233,7 +233,7 @@ function CountPage() {
     if (!inventory || !code.trim()) return;
     const description = manualDescription.trim();
     if (!description) { toast.error("Indica o nome ou descrição do produto."); return; }
-    const quantidade = Number(qty.replace(",", "."));
+    const quantidade = qty.trim() === "" ? NaN : Number(qty.replace(",", "."));
     if (!Number.isFinite(quantidade) || quantidade < 0) { toast.error("Indica uma quantidade válida."); return; }
     setBusy(true);
     try {
@@ -259,7 +259,7 @@ function CountPage() {
       });
       if (countError) throw countError;
       toast.success(`Produto cadastrado e contagem guardada: ${savedProduct.descricao}`);
-      setManualMode(false); setManualDescription(""); setCode(""); setQty("1");
+      setManualMode(false); setManualDescription(""); setCode(""); setQty("");
       await loadCounts(inventory.id);
       setTimeout(() => scanRef.current?.focus(), 50);
     } catch (e: any) { toast.error(`Não foi possível cadastrar o produto: ${e.message ?? e}`); }
@@ -280,7 +280,7 @@ function CountPage() {
       });
       if (error) throw error;
       toast.success(`Contagem guardada: ${current.codigo_artigo}`);
-      setCurrent(null); setCode(""); setQty("1"); setSearch(""); setResults([]);
+      setCurrent(null); setCode(""); setQty(""); setSearch(""); setResults([]);
       await loadCounts(inventory.id); setTimeout(() => scanRef.current?.focus(), 50);
     } catch (e: any) { toast.error(`Não foi possível gravar: ${e.message ?? e}`); }
     finally { setBusy(false); }
