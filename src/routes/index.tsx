@@ -181,13 +181,6 @@ function CountPage() {
     finally { setBusy(false); }
   }
 
-  async function deleteArticle(articleCode: string) {
-    if (!inventory || !window.confirm(`Apagar todas as contagens de ${articleCode} nesta loja?`)) return;
-    const { error } = await db.from("inv_contagens").delete().eq("inventario_id", inventory.id).eq("codigo_artigo", articleCode);
-    if (error) { toast.error(error.message); return; }
-    await loadCounts(inventory.id); toast.success("Contagem do artigo apagada.");
-  }
-
   const totalUnits = entries.reduce((sum, row) => sum + row.quantidade, 0);
   const storeName = STORES.find((s) => s.code === store)?.name;
   const availableStores = STORES.filter((s) => s.code !== "CC");
@@ -234,10 +227,10 @@ function CountPage() {
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">Contagens desta loja</h2><p className="text-sm text-muted-foreground">{storeName ?? "Seleciona uma loja"} · atualização automática</p></div><button disabled={!inventory || busy} onClick={() => inventory && void loadCounts(inventory.id)} className="rounded-lg border px-4 py-2 font-semibold">Atualizar</button></div>
-        <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody>
-          {!inventory && <tr><td colSpan={4} className="p-5 text-center text-muted-foreground">Seleciona uma loja para começar.</td></tr>}
-          {inventory && entries.length === 0 && <tr><td colSpan={4} className="p-5 text-center text-muted-foreground">Ainda não existem contagens.</td></tr>}
-          {entries.map((row) => <tr key={row.codigo_artigo} className="border-t"><td className="p-3 font-mono font-semibold">{row.codigo_artigo}</td><td className="p-3">{row.descricao}</td><td className="p-3 text-right font-mono font-bold">{row.quantidade}</td><td className="p-3 text-right"><button onClick={() => void deleteArticle(row.codigo_artigo)} className="text-destructive hover:underline">Apagar</button></td></tr>)}
+        <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th></tr></thead><tbody>
+          {!inventory && <tr><td colSpan={3} className="p-5 text-center text-muted-foreground">Seleciona uma loja para começar.</td></tr>}
+          {inventory && entries.length === 0 && <tr><td colSpan={3} className="p-5 text-center text-muted-foreground">Ainda não existem contagens.</td></tr>}
+          {entries.map((row) => <tr key={row.codigo_artigo} className="border-t"><td className="p-3 font-mono font-semibold">{row.codigo_artigo}</td><td className="p-3">{row.descricao}</td><td className="p-3 text-right font-mono font-bold">{row.quantidade}</td></tr>)}
         </tbody></table></div>
       </section>
     </main>
