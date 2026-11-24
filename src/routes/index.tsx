@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
   component: CountPage,
 });
 
-type Article = { codigo_artigo: string; descricao: string };
+type Article = { codigo_artigo: string; descricao: string; stock_atual?: number | null };
 type CountEntry = { id: string; codigo_artigo: string; descricao: string; quantidade: number; contado_em: string };
 
 function CountPage() {
@@ -103,15 +103,24 @@ function CountPage() {
     setBusy(true);
     try {
       const { data: barcodeRows, error: barcodeError } = await db.from("inv_importacao_primavera")
-        .select("artigo,descricao,cod_barras").eq("cod_barras", scanned).limit(50);
+        .select("artigo,descricao,cod_barras,stock_atual,armazem")
+        .eq("cod_barras", scanned).eq("armazem", store).limit(5);
       if (barcodeError) throw barcodeError;
-      let article = barcodeRows?.[0] ? { codigo_artigo: barcodeRows[0].artigo, descricao: barcodeRows[0].descricao ?? "" } : null;
+      let article = barcodeRows?.[0] ? {
+        codigo_artigo: barcodeRows[0].artigo,
+        descricao: barcodeRows[0].descricao ?? "",
+        stock_atual: barcodeRows[0].stock_atual == null ? null : Number(barcodeRows[0].stock_atual),
+      } : null;
       if (!article) {
         const { data: articleRows, error: articleError } = await db.from("inv_importacao_primavera")
-          .select("artigo,descricao").eq("artigo", scanned).limit(20);
+          .select("artigo,descricao,stock_atual").eq("artigo", scanned).eq("armazem", store).limit(5);
         if (articleError) throw articleError;
         const found = articleRows?.[0];
-        if (found) article = { codigo_artigo: found.artigo, descricao: found.descricao ?? "" };
+        if (found) article = {
+          codigo_artigo: found.artigo,
+          descricao: found.descricao ?? "",
+          stock_atual: found.stock_atual == null ? null : Number(found.stock_atual),
+        };
       }
       if (!article) {
         setSearch(scanned); setResults([]); toast.warning("Código não encontrado. Pesquisa pelo artigo ou descrição.");
@@ -145,16 +154,20 @@ function CountPage() {
     setBusy(true);
     try {
       const [byCode, byDescription, byBarcode] = await Promise.all([
-        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("artigo", `%${term}%`).limit(30),
-        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("descricao", `%${term}%`).limit(30),
-        db.from("inv_importacao_primavera").select("artigo,descricao").ilike("cod_barras", `%${term}%`).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("artigo", `%${term}%`).eq("armazem", store).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("descricao", `%${term}%`).eq("armazem", store).limit(30),
+        db.from("inv_importacao_primavera").select("artigo,descricao,stock_atual,armazem").ilike("cod_barras", `%${term}%`).eq("armazem", store).limit(30),
       ]);
       if (byCode.error) throw byCode.error;
       if (byDescription.error) throw byDescription.error;
       if (byBarcode.error) throw byBarcode.error;
       const unique = new Map<string, Article>();
       for (const a of [...(byCode.data ?? []), ...(byDescription.data ?? []), ...(byBarcode.data ?? [])]) {
-        if (!unique.has(a.artigo)) unique.set(a.artigo, { codigo_artigo: a.artigo, descricao: a.descricao ?? "" });
+        if (!unique.has(a.artigo)) unique.set(a.artigo, {
+          codigo_artigo: a.artigo,
+          descricao: a.descricao ?? "",
+          stock_atual: a.stock_atual == null ? null : Number(a.stock_atual),
+        });
       }
       setResults([...unique.values()]);
     } catch (e: any) { toast.error(`Erro na pesquisa: ${e.message ?? e}`); }
@@ -213,7 +226,7 @@ function CountPage() {
               <button disabled={!inventory || busy || !!current} className="rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground disabled:opacity-50">Procurar</button>
             </form>
             {current && <form onSubmit={saveCount} className="mt-4 rounded-xl border-2 border-accent bg-accent/10 p-4">
-              <p className="font-mono text-sm text-muted-foreground">{current.codigo_artigo}</p><h3 className="text-lg font-bold">{current.descricao}</h3>
+              <p className="font-mono text-sm text-muted-foreground">{current.codigo_artigo}</p><h3 className="text-lg font-bold">{current.descricao}</h3><p className="mt-1 text-sm text-muted-foreground">Stock Primavera nesta loja: <strong className="font-mono text-foreground">{current.stock_atual == null ? "—" : current.stock_atual}</strong></p>
               <div className="mt-3 flex flex-wrap gap-2"><input ref={qtyRef} value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="Quantidade" className="w-36 rounded-lg border bg-background px-3 py-3 text-xl font-bold" /><button disabled={busy} className="flex-1 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Guardar contagem</button><button type="button" onClick={() => { setCurrent(null); setCode(""); scanRef.current?.focus(); }} className="rounded-lg border px-4 py-3">Cancelar</button></div>
             </form>}
           </div>
