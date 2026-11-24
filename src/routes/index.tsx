@@ -291,19 +291,19 @@ function CountPage() {
   const availableStores = STORES.filter((s) => s.code !== "CC");
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-      <section className="flex flex-wrap items-end justify-between gap-4">
+    <main className="pda-page mx-auto max-w-5xl space-y-5 px-3 py-5 sm:px-4 sm:py-8">
+      <section className="pda-heading flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Operação de loja</p><h1 className="text-3xl font-extrabold tracking-tight">Contagem de inventário</h1><p className="mt-1 text-muted-foreground">Leitura por código de barras, com sincronização entre dispositivos.</p></div>
-        <div className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3"><span className="text-sm text-muted-foreground">Artigos</span><strong className="font-mono text-xl">{entries.length}</strong><span className="mx-1 h-6 border-l" /><span className="text-sm text-muted-foreground">Unidades</span><strong className="font-mono text-xl">{totalUnits}</strong></div>
+        <div className="pda-counter flex items-center gap-2 rounded-xl border bg-card px-4 py-3"><span className="text-sm text-muted-foreground">Artigos</span><strong className="font-mono text-xl">{entries.length}</strong><span className="mx-1 h-6 border-l" /><span className="text-sm text-muted-foreground">Unidades</span><strong className="font-mono text-xl">{totalUnits}</strong></div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[300px_1fr]">
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="pda-panel rounded-xl border bg-card p-4 shadow-sm sm:p-5">
           <h2 className="font-bold">Identificação</h2>
           <label className="mt-4 block text-sm font-medium">Responsável pela contagem</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" placeholder="Ex.: João, Nuno ou António" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="off" placeholder="Ex.: João, Nuno ou António" className="pda-input mt-1 w-full rounded-lg border bg-background px-3 py-3" />
           <label className="mt-4 block text-sm font-medium">Loja / armazém</label>
-          <select value={store} disabled={busy || !name.trim()} onChange={(e) => void openStore(e.target.value)} className="mt-1 w-full rounded-lg border bg-background px-3 py-3">
+          <select value={store} disabled={busy || !name.trim()} onChange={(e) => void openStore(e.target.value)} className="pda-input mt-1 w-full rounded-lg border bg-background px-3 py-3">
             <option value="">Selecionar loja</option>{availableStores.map((s) => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
           </select>
           {!name.trim() && <p className="mt-2 text-xs text-muted-foreground">Escreve o teu nome para poderes selecionar a loja.</p>}
@@ -311,35 +311,35 @@ function CountPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="pda-panel rounded-xl border bg-card p-4 shadow-sm sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Leitura do artigo</h2><label className="flex items-center gap-2 text-sm font-normal"><input type="checkbox" checked={quick} onChange={(e) => setQuick(e.target.checked)} /> Modo rápido (1 unidade)</label></div>
             <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={(e) => { e.preventDefault(); void findArticle(code); }}>
-              <input ref={scanRef} value={code} onChange={(e) => setCode(e.target.value)} disabled={!inventory || busy || !!current || manualMode} placeholder="Ler código de barras com a pistola" autoComplete="off" className="min-w-0 flex-1 rounded-lg border-2 border-primary/30 bg-background px-4 py-4 font-mono text-xl" />
-              <button disabled={!inventory || busy || !!current || manualMode} className="rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground disabled:opacity-50">Procurar</button>
+              <input ref={scanRef} value={code} onChange={(e) => setCode(e.target.value)} disabled={!inventory || busy || !!current || manualMode} placeholder="Ler código de barras com a pistola" autoComplete="off" className="pda-scan-input min-w-0 flex-1 rounded-lg border-2 border-primary/30 bg-background px-4 py-4 font-mono text-xl" />
+              <button disabled={!inventory || busy || !!current || manualMode} className="pda-primary rounded-lg bg-primary px-6 py-3 font-bold text-primary-foreground disabled:opacity-50">Procurar</button>
             </form>
-            {manualMode && <form onSubmit={saveManualProduct} className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-500/10 p-4">
+            {manualMode && <form onSubmit={saveManualProduct} className="pda-active mt-4 rounded-xl border-2 border-amber-500 bg-amber-500/10 p-4">
               <p className="text-sm font-semibold text-amber-700">Código não encontrado na base Primavera</p>
               <p className="mt-1 font-mono text-sm">Código lido: {code}</p>
               <label className="mt-3 block text-sm font-medium">Nome / descrição do produto</label>
               <input value={manualDescription} onChange={(e) => setManualDescription(e.target.value)} autoFocus maxLength={200} placeholder="Escreve o nome do produto" className="mt-1 w-full rounded-lg border bg-background px-3 py-3" />
               <label className="mt-3 block text-sm font-medium">Quantidade contada</label>
-              <div className="mt-2 flex flex-wrap gap-2"><input ref={qtyRef} value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="Quantidade" className="w-36 rounded-lg border bg-background px-3 py-3 text-xl font-bold" /><button disabled={busy} className="flex-1 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Cadastrar e guardar</button><button type="button" onClick={() => { setManualMode(false); setCode(""); setManualDescription(""); scanRef.current?.focus(); }} className="rounded-lg border px-4 py-3">Cancelar</button></div>
+              <div className="mt-2 flex flex-wrap gap-2"><input ref={qtyRef} value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="Quantidade" className="pda-quantity w-36 rounded-lg border bg-background px-3 py-3 text-xl font-bold" /><button disabled={busy} className="pda-primary flex-1 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Cadastrar e guardar</button><button type="button" onClick={() => { setManualMode(false); setCode(""); setManualDescription(""); scanRef.current?.focus(); }} className="rounded-lg border px-4 py-3">Cancelar</button></div>
             </form>}
-            {current && <form onSubmit={saveCount} className="mt-4 rounded-xl border-2 border-accent bg-accent/10 p-4">
+            {current && <form onSubmit={saveCount} className="pda-active mt-4 rounded-xl border-2 border-accent bg-accent/10 p-4">
               <p className="font-mono text-sm text-muted-foreground">{current.codigo_artigo}</p><h3 className="text-lg font-bold">{current.descricao}</h3><p className="mt-1 text-sm text-muted-foreground">Stock Primavera nesta loja: <strong className="font-mono text-foreground">{current.stock_atual == null ? "—" : current.stock_atual}</strong></p>
-              <div className="mt-3 flex flex-wrap gap-2"><input ref={qtyRef} value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="Quantidade" className="w-36 rounded-lg border bg-background px-3 py-3 text-xl font-bold" /><button disabled={busy} className="flex-1 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Guardar contagem</button><button type="button" onClick={() => { setCurrent(null); setCode(""); scanRef.current?.focus(); }} className="rounded-lg border px-4 py-3">Cancelar</button></div>
+              <div className="mt-3 flex flex-wrap gap-2"><input ref={qtyRef} value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" placeholder="Quantidade" className="w-36 rounded-lg border bg-background px-3 py-3 text-xl font-bold" /><button disabled={busy} className="pda-primary flex-1 rounded-lg bg-primary px-5 py-3 font-bold text-primary-foreground">Guardar contagem</button><button type="button" onClick={() => { setCurrent(null); setCode(""); scanRef.current?.focus(); }} className="rounded-lg border px-4 py-3">Cancelar</button></div>
             </form>}
           </div>
 
           <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <h2 className="font-bold">Pesquisa manual</h2><div className="mt-3 flex gap-2"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchArticles(); }} placeholder="Começa a escrever artigo, descrição ou código de barras…" className="min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" /></div>
+            <h2 className="font-bold">Pesquisa manual</h2><div className="mt-3 flex gap-2"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void searchArticles(); }} placeholder="Começa a escrever artigo, descrição ou código de barras…" className="pda-input min-w-0 flex-1 rounded-lg border bg-background px-3 py-3" /></div>
             {search.trim().length >= 2 && results.length > 0 && <div className="mt-3 grid gap-2">{results.map((a) => <button key={a.codigo_artigo} onClick={() => void chooseArticle(a).catch((e) => toast.error(e.message))} className="rounded-lg border p-3 text-left hover:bg-muted"><span className="block font-mono text-sm">{a.codigo_artigo}</span><span className="font-semibold">{a.descricao}</span></button>)}</div>}
             {search.trim().length >= 2 && results.length === 0 && <p className="mt-3 text-sm text-muted-foreground">A procurar artigos correspondentes… Se não aparecer, confirma o código ou tenta outra parte da descrição.</p>}
           </div>
         </div>
       </section>
 
-      <section className="rounded-xl border bg-card p-5 shadow-sm">
+      <section className="pda-panel rounded-xl border bg-card p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold">Contagens desta loja</h2><p className="text-sm text-muted-foreground">{storeName ?? "Seleciona uma loja"} · atualização automática</p></div><button disabled={!inventory || busy} onClick={() => inventory && void loadCounts(inventory.id)} className="rounded-lg border px-4 py-2 font-semibold">Atualizar</button></div>
         <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted text-left"><tr><th className="p-3">Artigo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Contado</th></tr></thead><tbody>
           {!inventory && <tr><td colSpan={3} className="p-5 text-center text-muted-foreground">Seleciona uma loja para começar.</td></tr>}
