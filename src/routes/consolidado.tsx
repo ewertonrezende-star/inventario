@@ -40,23 +40,26 @@ function ConsolidatedPage() {
       const merged = mergeCounts(counts, inventoryMap);
       const articleCodes = [...new Set(merged.map((r) => r.codigo_artigo))];
       const stores = [...new Set(merged.map((r) => r.loja))];
-      const articles = new Map<string, { descricao: string; preco: number | null }>();
+      const productData = new Map<string, { descricao: string; preco: number | null }>();
       const stocks = new Map<string, number>();
-      for (let i = 0; i < articleCodes.length; i += 500) {
-        const { data, error } = await db.from("inv_artigos")
-          .select("codigo_artigo,descricao,preco_custo").in("codigo_artigo", articleCodes.slice(i, i + 500));
-        if (error) throw error;
-        for (const a of data ?? []) articles.set(a.codigo_artigo, { descricao: a.descricao, preco: a.preco_custo == null ? null : Number(a.preco_custo) });
-      }
       for (let i = 0; i < articleCodes.length; i += 300) {
-        const { data, error } = await db.from("inv_stock_lojas")
-          .select("codigo_artigo,armazem,stock_atual").in("codigo_artigo", articleCodes.slice(i, i + 300)).in("armazem", stores);
+        const { data, error } = await db.from("inv_importacao_primavera")
+          .select("artigo,descricao,ultimo_preco_compra,stock_atual,armazem")
+          .in("artigo", articleCodes.slice(i, i + 300)).in("armazem", stores);
         if (error) throw error;
-        for (const s of data ?? []) stocks.set(`${s.codigo_artigo}|${s.armazem}`, Number(s.stock_atual));
+        for (const item of data ?? []) {
+          if (!productData.has(item.artigo)) {
+            productData.set(item.artigo, {
+              descricao: item.descricao ?? "",
+              preco: item.ultimo_preco_compra == null ? null : Number(item.ultimo_preco_compra),
+            });
+          }
+          stocks.set(`${item.artigo}|${item.armazem}`, Number(item.stock_atual ?? 0));
+        }
       }
 
       for (const row of merged) {
-        const article = articles.get(row.codigo_artigo);
+        const article = productData.get(row.codigo_artigo);
         row.descricao = article?.descricao ?? "Artigo sem descrição";
         row.preco = article?.preco ?? null;
         const original = stocks.get(`${row.codigo_artigo}|${row.loja}`);
