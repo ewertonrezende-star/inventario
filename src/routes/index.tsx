@@ -233,8 +233,8 @@ function CountPage() {
     if (!inventory || !code.trim()) return;
     const description = manualDescription.trim();
     if (!description) { toast.error("Indica o nome ou descrição do produto."); return; }
-    const quantity = Number(qty.replace(",", "."));
-    if (!Number.isFinite(quantity) || quantity < 0) { toast.error("Indica uma quantidade válida."); return; }
+    const quantidade = Number(qty.replace(",", "."));
+    if (!Number.isFinite(quantidade) || quantidade < 0) { toast.error("Indica uma quantidade válida."); return; }
     setBusy(true);
     try {
       const manualCode = `MAN-${code.trim()}`;
@@ -269,8 +269,8 @@ function CountPage() {
   async function saveCount(e: React.FormEvent) {
     e.preventDefault();
     if (!inventory || !current) return;
-    const quantity = Number(qty.replace(",", "."));
-    if (!Number.isFinite(quantity) || quantity < 0) { toast.error("Indica uma quantidade válida."); return; }
+    const quantidade = Number(qty.replace(",", "."));
+    if (!Number.isFinite(quantidade) || quantidade < 0) { toast.error("Indica uma quantidade válida."); return; }
     setBusy(true);
     try {
       const { error } = await db.from("inv_contagens").insert({
