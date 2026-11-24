@@ -58,6 +58,18 @@ function ConsolidatedPage() {
         }
       }
 
+      const manualCodes = articleCodes.filter((code) => code.startsWith("MAN-"));
+      for (let i = 0; i < manualCodes.length; i += 300) {
+        const { data, error } = await db.from("inv_produtos_manuais")
+          .select("codigo_artigo,descricao").in("codigo_artigo", manualCodes.slice(i, i + 300));
+        if (error) throw error;
+        for (const item of data ?? []) {
+          if (!productData.has(item.codigo_artigo)) {
+            productData.set(item.codigo_artigo, { descricao: item.descricao ?? "", preco: null });
+          }
+        }
+      }
+
       for (const row of merged) {
         const article = productData.get(row.codigo_artigo);
         row.descricao = article?.descricao ?? "Artigo sem descrição";
