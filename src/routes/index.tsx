@@ -17,6 +17,7 @@ type CountEntry = { id: string; codigo_artigo: string; descricao: string; quanti
 function CountPage() {
   const [name, setName] = useState("");
   const [store, setStore] = useState("");
+  const [identityReady, setIdentityReady] = useState(false);
   const [inventory, setInventory] = useState<any>(null);
   const [code, setCode] = useState("");
   const [search, setSearch] = useState("");
@@ -32,12 +33,25 @@ function CountPage() {
   const deviceId = useRef("");
 
   useEffect(() => {
-    // O nome é pedido a cada nova sessão para não atribuir contagens
-    // ao colaborador anterior quando o dispositivo é partilhado.
+    // Recupera a identificação ao regressar da página Consolidado.
+    // sessionStorage mantém os dados apenas nesta sessão do separador.
+    const savedName = sessionStorage.getItem("inv_session_name") ?? "";
+    const savedStore = sessionStorage.getItem("inv_session_store") ?? localStorage.getItem("inv_store") ?? "";
+    if (savedName) setName(savedName);
+    if (savedStore) setStore(savedStore);
+    setIdentityReady(true);
+
     let id = localStorage.getItem("inv_device_id");
     if (!id) { id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `device-${Date.now()}`; localStorage.setItem("inv_device_id", id); }
     deviceId.current = id;
   }, []);
+
+  useEffect(() => {
+    if (!identityReady) return;
+    sessionStorage.setItem("inv_session_name", name);
+    sessionStorage.setItem("inv_session_store", store);
+    if (store) localStorage.setItem("inv_store", store);
+  }, [name, store, identityReady]);
 
   const loadCounts = useCallback(async (inventoryId: string) => {
     const { data, error } = await db.from("inv_contagens")
@@ -91,11 +105,11 @@ function CountPage() {
   }
 
   useEffect(() => {
-    if (store && name.trim() && !inventory) void openStore(store);
+    if (identityReady && store && name.trim() && !inventory) void openStore(store);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    // Initial local preference only.
+    // Reabre o inventário da loja guardada ao regressar da página Consolidado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store]);
+  }, [store, identityReady]);
 
   async function findArticle(value: string) {
     const scanned = value.trim();
