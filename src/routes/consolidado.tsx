@@ -109,11 +109,11 @@ function ConsolidatedPage() {
   }
 
   function exportCsv() {
-    const lines = ["loja;artigo;descricao;contado;stock_loja;stock_primavera;diferenca;preco_custo;valor_contado;contado_por"];
+    const lines = ["loja;artigo;codigo_barras;descricao;contado;stock_loja;stock_primavera;diferenca;preco_custo;valor_contado;contado_por"];
     for (const row of filtered) {
       const diff = row.stock == null ? "" : row.contado - row.stock;
       lines.push([
-        row.loja, row.codigo_artigo, row.descricao.replace(/;/g, ","),
+        row.loja, row.codigo_artigo, row.codigos_barras.join(" / "), row.descricao.replace(/;/g, ","),
         row.contado, row.stock ?? "", row.stockOriginal ?? "", diff,
         row.preco ?? "", row.preco == null ? "" : (row.contado * row.preco).toFixed(2),
         row.utilizadores.join(" / "),
