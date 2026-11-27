@@ -29,6 +29,7 @@ export type MergedRow = {
   stockOriginal: number | null;
   preco: number | null;
   utilizadores: string[];
+  codigos_barras: string[];
 };
 
 export function mergeCounts(rows: CountRow[], inventories: Map<string, { loja: string; id: string }>, names = new Map<string, string>()) {
@@ -39,9 +40,11 @@ export function mergeCounts(rows: CountRow[], inventories: Map<string, { loja: s
     const key = `${inv.loja}|${row.codigo_artigo}`;
     const current = map.get(key) ?? {
       loja: inv.loja, inventario_id: inv.id, codigo_artigo: row.codigo_artigo,
-      descricao: "", contado: 0, stock: null, stockOriginal: null, preco: null, utilizadores: [],
+      descricao: "", contado: 0, stock: null, stockOriginal: null, preco: null, utilizadores: [], codigos_barras: [],
     };
     current.contado += Number(row.quantidade || 0);
+    const barcode = row.codigo_barras_lido?.trim();
+    if (barcode && !current.codigos_barras.includes(barcode)) current.codigos_barras.push(barcode);
     const person = row.contado_por?.trim() || (row.utilizador_id ? (names.get(row.utilizador_id) ?? row.utilizador_id.slice(0, 8)) : "Contagem");
     if (!current.utilizadores.includes(person)) current.utilizadores.push(person);
     map.set(key, current);
